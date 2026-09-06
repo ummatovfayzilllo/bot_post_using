@@ -7,6 +7,7 @@ import { ChannelsService } from 'src/modules/channels/channels.service';
 import { GroupsService } from 'src/modules/groups/groups.service';
 import { PostsService } from 'src/modules/posts/posts.service';
 import { PostFormatterService } from 'src/core/post_formatter.service';
+import { VoiceTranscriberService } from 'src/core/voice_transcriber.service';
 import { AdminService } from './admin.service';
 import { MessageGenerator } from 'src/common/utils/_message_generator';
 import { CallbackKeyboardBuilder } from 'src/common/utils/_cb_functions';
@@ -23,6 +24,7 @@ export class AdminUpdate {
     private readonly groupsService: GroupsService,
     private readonly postsService: PostsService,
     private readonly postFormatter: PostFormatterService,
+    private readonly voiceTranscriber: VoiceTranscriberService,
     private readonly adminService: AdminService,
   ) {}
 
@@ -478,6 +480,119 @@ export class AdminUpdate {
     } catch (error) {
       this.logger.error('onDocument da xatolik:', error);
       await ctx.reply('Hujjatni qabul qilishda xatolik yuz berdi. Iltimos, qaytadan yuboring.');
+    }
+  }
+
+  @On('voice')
+  async onVoice(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from || !ctx.message || !('voice' in ctx.message)) return;
+      const userId = BigInt(ctx.from.id);
+      const state = await this.stateService.getState(userId);
+
+      if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
+        const voice = ctx.message.voice;
+
+        const transcribingMsg = await ctx.reply(
+          '🎙 <i>Ovozli xabar tinglanmoqda va matnga o\'girilmoqda...</i>',
+          { parse_mode: 'HTML' },
+        );
+
+        const recognizedText = await this.voiceTranscriber.transcribeVoice(voice.file_id);
+
+        try {
+          await ctx.deleteMessage(transcribingMsg.message_id);
+        } catch (e) {}
+
+        if (!recognizedText || !recognizedText.trim()) {
+          await ctx.reply(
+            '⚠️ <b>Ovozli xabarni tushunib bo\'lmadi.</b>\n\nIltimos, shovqinsiz joyda aniqroq gapirib qaytadan yuboring yoki matn ko\'rinishida yozing.',
+            { parse_mode: 'HTML' },
+          );
+          return;
+        }
+
+        const processingMsg = await ctx.reply(
+          `📝 <b>Aniqlangan ovoz matni:</b>\n<i>"${recognizedText}"</i>\n\n⏳ <i>AI yordamida chiroyli postga aylantirilmoqda...</i>`,
+          { parse_mode: 'HTML' },
+        );
+
+        const beautified = await this.postFormatter.beautifyPost(recognizedText);
+
+        state.draftPost = {
+          ...state.draftPost,
+          rawText: recognizedText,
+          beautifiedText: beautified,
+          text: beautified,
+        };
+        state.step = BotWizardStep.REVIEWING_AI_FORMAT;
+        await this.stateService.setState(state);
+
+        try {
+          await ctx.deleteMessage(processingMsg.message_id);
+        } catch (e) {}
+
+        await this.safeReply(
+          ctx,
+          `✨ <b>Ovozdan yaratilgan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
+          CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+        );
+      }
+    } catch (error) {
+      this.logger.error('onVoice da xatolik:', error);
+      await ctx.reply('Ovozli xabarni qayta ishlashda xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
+    }
+  }
+
+  @On('audio')
+  async onAudio(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from || !ctx.message || !('audio' in ctx.message)) return;
+      const userId = BigInt(ctx.from.id);
+      const state = await this.stateService.getState(userId);
+
+      if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
+        const audio = ctx.message.audio;
+
+        const transcribingMsg = await ctx.reply(
+          '🎙 <i>Audio fayl tinglanmoqda va matnga o\'girilmoqda...</i>',
+          { parse_mode: 'HTML' },
+        );
+
+        const recognizedText = await this.voiceTranscriber.transcribeVoice(audio.file_id);
+
+        try {
+          await ctx.deleteMessage(transcribingMsg.message_id);
+        } catch (e) {}
+
+        if (!recognizedText || !recognizedText.trim()) {
+          await ctx.reply(
+            '⚠️ <b>Audiodan matn ajratib bo\'lmadi.</b>\n\nIltimos, qaytadan yuboring yoki matn ko\'rinishida yozing.',
+            { parse_mode: 'HTML' },
+          );
+          return;
+        }
+
+        const beautified = await this.postFormatter.beautifyPost(recognizedText);
+
+        state.draftPost = {
+          ...state.draftPost,
+          rawText: recognizedText,
+          beautifiedText: beautified,
+          text: beautified,
+        };
+        state.step = BotWizardStep.REVIEWING_AI_FORMAT;
+        await this.stateService.setState(state);
+
+        await this.safeReply(
+          ctx,
+          `✨ <b>Audiodan yaratilgan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
+          CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+        );
+      }
+    } catch (error) {
+      this.logger.error('onAudio da xatolik:', error);
+      await ctx.reply('Audioni qayta ishlashda xatolik yuz berdi.');
     }
   }
 

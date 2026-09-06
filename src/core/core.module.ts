@@ -10,6 +10,7 @@ import { BotConnectorService } from './bot_connector.service';
 import { AppLoggerService } from 'src/global/logger/logger.service';
 import { UserFilterGuard } from 'src/global/user_filter/user_filter.guard';
 import { PostFormatterService } from './post_formatter.service';
+import { VoiceTranscriberService } from './voice_transcriber.service';
 import { PostBackup, PostBackupSchema } from './schemas/post-backup.schema';
 import { StateBackup, StateBackupSchema } from './schemas/state-backup.schema';
 import configuration from 'src/common/config/configuration';
@@ -47,6 +48,7 @@ import configuration from 'src/common/config/configuration';
     MessageQueueService,
     BotConnectorService,
     PostFormatterService,
+    VoiceTranscriberService,
     AppLoggerService,
     UserFilterGuard,
   ],
@@ -57,6 +59,7 @@ import configuration from 'src/common/config/configuration';
     MessageQueueService,
     BotConnectorService,
     PostFormatterService,
+    VoiceTranscriberService,
     AppLoggerService,
     UserFilterGuard,
     MongooseModule,
