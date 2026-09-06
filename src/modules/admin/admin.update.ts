@@ -34,7 +34,6 @@ export class AdminUpdate {
       return await ctx.reply(text, { parse_mode: 'HTML', ...extra });
     } catch (err) {
       this.logger.warn(`HTML parse failed (${err.message}), falling back to plain text.`);
-      // Strip parse_mode and send plain text
       const fallbackExtra = { ...extra };
       delete fallbackExtra.parse_mode;
       return await ctx.reply(text.replace(/<[^>]*>?/gm, ''), fallbackExtra);
@@ -50,6 +49,17 @@ export class AdminUpdate {
       delete fallbackExtra.parse_mode;
       return await ctx.editMessageText(text.replace(/<[^>]*>?/gm, ''), fallbackExtra);
     }
+  }
+
+  private formatReviewMessage(beautified: string): string {
+    const cleanText = beautified.replace(/<[^>]*>?/gm, '');
+    return (
+      `✨ <b>Formatlangan post ko'rinishi:</b>\n\n${beautified}\n\n` +
+      `────────────────\n` +
+      `📋 <b>Nusxalash uchun ustiga bosing:</b>\n<code>${cleanText}</code>\n` +
+      `────────────────\n` +
+      `<i>Quyidagi variantlardan birini tanlang:</i>`
+    );
   }
 
   @Start()
@@ -212,8 +222,31 @@ export class AdminUpdate {
 
           await this.safeReply(
             ctx,
-            `✨ <b>Formatlangan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            this.formatReviewMessage(beautified),
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(beautified),
+          );
+          break;
+        }
+
+        case BotWizardStep.REVIEWING_AI_FORMAT: {
+          // Foydalanuvchi tahrirlangan matnni yubordi
+          let editedText = text;
+          editedText = editedText.replace(/^@\w+\s*/, '').trim();
+
+          state.draftPost = {
+            ...state.draftPost,
+            text: editedText,
+          };
+          state.step = BotWizardStep.SELECTING_TARGETS;
+          await this.stateService.setState(state);
+
+          await ctx.reply('✏️ <b>Tahrirlangan matn qabul qilindi!</b>', { parse_mode: 'HTML' });
+
+          const targets = await this.adminService.getAllTargets();
+          await this.safeReply(
+            ctx,
+            MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
+            CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
           );
           break;
         }
@@ -315,8 +348,8 @@ export class AdminUpdate {
 
             await this.safeReply(
               ctx,
-              `✨ <b>E'lon aniqlandi va formatlandi:</b>\n\n${analysis.content}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-              CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+              this.formatReviewMessage(analysis.content),
+              CallbackKeyboardBuilder.aiFormatReviewKeyboard(analysis.content),
             );
           } else {
             await this.safeReply(
@@ -370,8 +403,8 @@ export class AdminUpdate {
 
           await this.safeReply(
             ctx,
-            `✨ <b>Formatlangan izoh ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            this.formatReviewMessage(beautified),
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(beautified),
           );
         } else {
           state.draftPost = {
@@ -431,8 +464,8 @@ export class AdminUpdate {
 
           await this.safeReply(
             ctx,
-            `✨ <b>Formatlangan izoh ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            this.formatReviewMessage(beautified),
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(beautified),
           );
         } else {
           state.draftPost = {
@@ -492,8 +525,8 @@ export class AdminUpdate {
 
           await this.safeReply(
             ctx,
-            `✨ <b>Formatlangan izoh ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            this.formatReviewMessage(beautified),
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(beautified),
           );
         } else {
           state.draftPost = {
@@ -568,11 +601,10 @@ export class AdminUpdate {
 
         await this.safeReply(
           ctx,
-          `✨ <b>Ovozdan yaratilgan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-          CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+          this.formatReviewMessage(beautified),
+          CallbackKeyboardBuilder.aiFormatReviewKeyboard(beautified),
         );
       } else {
-        // Erkin ovozli xabar (IDLE holatida)
         const processingMsg = await ctx.reply(
           `📝 <b>Aniqlangan ovoz:</b>\n<i>"${recognizedText}"</i>\n\n⏳ <i>AI orqali tahlil qilinmoqda...</i>`,
           { parse_mode: 'HTML' },
@@ -596,8 +628,8 @@ export class AdminUpdate {
 
           await this.safeReply(
             ctx,
-            `✨ <b>Ovozingizdan e'lon aniqlandi va tayyorlandi:</b>\n\n${analysis.content}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            this.formatReviewMessage(analysis.content),
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(analysis.content),
           );
         } else {
           await this.safeReply(
@@ -654,8 +686,8 @@ export class AdminUpdate {
 
         await this.safeReply(
           ctx,
-          `✨ <b>Audiodan yaratilgan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-          CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+          this.formatReviewMessage(beautified),
+          CallbackKeyboardBuilder.aiFormatReviewKeyboard(beautified),
         );
       } else {
         const analysis = await this.postFormatter.analyzeAndProcess(recognizedText);
@@ -672,8 +704,8 @@ export class AdminUpdate {
 
           await this.safeReply(
             ctx,
-            `✨ <b>Audiodan e'lon tayyorlandi:</b>\n\n${analysis.content}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            this.formatReviewMessage(analysis.content),
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(analysis.content),
           );
         } else {
           await this.safeReply(
@@ -740,23 +772,6 @@ export class AdminUpdate {
       );
     } catch (error) {
       this.logger.error('onKeepRawFormat da xatolik:', error);
-    }
-  }
-
-  @Action('rewrite_content')
-  async onRewriteContent(@Ctx() ctx: Context) {
-    try {
-      if (!ctx.from) return;
-      const userId = BigInt(ctx.from.id);
-      const state = await this.stateService.getState(userId);
-
-      state.step = BotWizardStep.WAITING_FOR_CONTENT;
-      await this.stateService.setState(state);
-
-      await ctx.answerCbQuery();
-      await this.safeEditMessageText(ctx, '✏️ <b>Yangi matn yoki mediani yuboring:</b>');
-    } catch (error) {
-      this.logger.error('onRewriteContent da xatolik:', error);
     }
   }
 

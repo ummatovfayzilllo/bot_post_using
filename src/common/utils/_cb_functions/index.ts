@@ -9,16 +9,18 @@ export class CallbackKeyboardBuilder {
     ]).resize();
   }
 
-  static aiFormatReviewKeyboard() {
+  static aiFormatReviewKeyboard(textToEdit: string = '') {
+    const cleanText = textToEdit.replace(/<[^>]*>?/gm, '');
+
     return Markup.inlineKeyboard([
       [
         Markup.button.callback('✨ AI formatini qabul qilish', 'accept_ai_format'),
       ],
       [
-        Markup.button.callback('📝 Asl matnni qoldirish', 'keep_raw_format'),
-        Markup.button.callback('✏️ Qayta yozish', 'rewrite_content'),
+        Markup.button.switchToCurrentChat('✏️ Matnni tahrirlash', cleanText),
       ],
       [
+        Markup.button.callback('📝 Asl matnni qoldirish', 'keep_raw_format'),
         Markup.button.callback('❌ Bekor qilish', 'cancel_action'),
       ],
     ]);
