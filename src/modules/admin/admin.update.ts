@@ -1118,15 +1118,15 @@ export class AdminUpdate {
       }
 
       await ctx.answerCbQuery('AI matnni qayta ko\'rib chiqmoqda...');
-      const loadingMsg = await ctx.reply('⏳ <i>Post matni AI yordamida qayta formatlanmoqda...</i>', {
-        parse_mode: 'HTML',
-      });
+      
+      // Xabarni joyida (in-place) yuklanish holatiga o'tkazamiz
+      await this.safeEditMessageText(
+        ctx,
+        '⏳ <i>Post matni AI yordamida qayta formatlanmoqda...</i>',
+        { parse_mode: 'HTML' },
+      );
 
       const beautified = await this.postFormatter.beautifyPost(post.text);
-
-      try {
-        await ctx.deleteMessage(loadingMsg.message_id);
-      } catch (e) {}
 
       // Vaqtinchalik sessiyada yangi taklif qilingan matnni saqlaymiz
       await this.stateService.setState({
