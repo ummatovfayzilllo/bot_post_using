@@ -1050,6 +1050,68 @@ export class AdminUpdate {
     }
   }
 
+  @Action(/ai_reformat:(.+)/)
+  async onAiReformat(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from || !('match' in ctx)) return;
+      const postId = (ctx as any).match[1];
+
+      const post = await this.postsService.getPostDetail(postId);
+      if (!post || !post.text) {
+        await ctx.answerCbQuery('Post matni topilmadi.', { show_alert: true });
+        return;
+      }
+
+      await ctx.answerCbQuery('AI matnni qayta ko\'rib chiqmoqda...');
+      const loadingMsg = await ctx.reply('⏳ <i>Post matni AI yordamida qayta formatlanmoqda...</i>', {
+        parse_mode: 'HTML',
+      });
+
+      const beautified = await this.postFormatter.beautifyPost(post.text);
+
+      try {
+        await ctx.deleteMessage(loadingMsg.message_id);
+      } catch (e) {}
+
+      const updateResult = await this.postsService.updatePostText(postId, beautified);
+
+      if (updateResult.success) {
+        let alertMsg = '✅ Post AI yordamida qayta formatlandi!';
+        if (updateResult.isSent) {
+          alertMsg = `✅ Yuborilgan xabar Telegramda jonli tahrirlandi (${updateResult.editSuccessCount} ta chat)!`;
+        }
+        await ctx.reply(alertMsg);
+
+        const updatedPost = await this.postsService.getPostDetail(postId);
+        if (updatedPost) {
+          const previewText = MessageGenerator.postPreviewMessage({
+            text: updatedPost.text,
+            mediaType: updatedPost.mediaType,
+            scheduledAt: updatedPost.scheduledAt,
+            status: updatedPost.status,
+            targetsCount: updatedPost.targets.length,
+            createdAt: updatedPost.createdAt,
+          });
+
+          await this.safeReply(
+            ctx,
+            previewText,
+            CallbackKeyboardBuilder.postDetailKeyboard(
+              updatedPost.id,
+              updatedPost.status,
+              updatedPost.text || undefined,
+            ),
+          );
+        }
+      } else {
+        await ctx.reply(`❌ Xatolik: ${updateResult.message}`);
+      }
+    } catch (error) {
+      this.logger.error('onAiReformat da xatolik:', error);
+      await ctx.reply('AI qayta formatlashda xatolik yuz berdi.');
+    }
+  }
+
   @Action(/send_now:(.+)/)
   async onSendNow(@Ctx() ctx: Context) {
     try {

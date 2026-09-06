@@ -106,6 +106,11 @@ export class CallbackKeyboardBuilder {
       rows.push([
         Markup.button.switchToCurrentChat('✏️ Matnni tahrirlash', cleanText),
       ]);
+      if (cleanText) {
+        rows.push([
+          Markup.button.callback('✨ AI bilan qayta formatlash', `ai_reformat:${postId}`),
+        ]);
+      }
       rows.push([
         Markup.button.callback('⚡️ Darhol yuborish', `send_now:${postId}`),
         Markup.button.callback('🗑 O\'chirish', `delete_post:${postId}`),
@@ -115,6 +120,9 @@ export class CallbackKeyboardBuilder {
       if (cleanText) {
         rows.push([
           Markup.button.switchToCurrentChat('✏️ Xabarni tahrirlash', cleanText),
+        ]);
+        rows.push([
+          Markup.button.callback('✨ AI bilan qayta formatlash', `ai_reformat:${postId}`),
         ]);
       }
       rows.push([
