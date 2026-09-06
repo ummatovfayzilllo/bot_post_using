@@ -52,12 +52,8 @@ export class AdminUpdate {
   }
 
   private formatReviewMessage(beautified: string): string {
-    const cleanText = beautified.replace(/<[^>]*>?/gm, '');
     return (
       `✨ <b>Formatlangan post ko'rinishi:</b>\n\n${beautified}\n\n` +
-      `────────────────\n` +
-      `📋 <b>Nusxalash uchun ustiga bosing:</b>\n<code>${cleanText}</code>\n` +
-      `────────────────\n` +
       `<i>Quyidagi variantlardan birini tanlang:</i>`
     );
   }

@@ -84,11 +84,6 @@ export class MessageGenerator {
       statusEmoji = '🔴';
     }
 
-    const cleanText = (post.text || '').replace(/<[^>]*>/g, '');
-    const copyBlock = cleanText
-      ? `\n\n📋 <b>Nusxa olish uchun bosing (Tap to copy):</b>\n<code>${cleanText}</code>`
-      : '';
-
     return (
       `📋 <b>E'LON TAFSILOTLARI:</b>\n` +
       `────────────────────────\n` +
@@ -97,8 +92,7 @@ export class MessageGenerator {
       `⏰ <b>Rejalashtirilgan:</b> ${dateStr}\n` +
       `📅 <b>Yaratilgan:</b> ${new Date(post.createdAt).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' })}\n` +
       `────────────────────────\n\n` +
-      `<b>Post ko'rinishi:</b>\n${post.text || '<i>(Matnsiz / faqat media)</i>'}` +
-      copyBlock
+      `<b>Post ko'rinishi:</b>\n${post.text || '<i>(Matnsiz / faqat media)</i>'}`
     );
   }
 
