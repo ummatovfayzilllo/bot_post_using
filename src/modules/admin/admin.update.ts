@@ -8,6 +8,7 @@ import { GroupsService } from 'src/modules/groups/groups.service';
 import { PostsService } from 'src/modules/posts/posts.service';
 import { PostFormatterService } from 'src/core/post_formatter.service';
 import { VoiceTranscriberService } from 'src/core/voice_transcriber.service';
+import { UsersService } from 'src/modules/users/users.service';
 import { AdminService } from './admin.service';
 import { MessageGenerator } from 'src/common/utils/_message_generator';
 import { CallbackKeyboardBuilder } from 'src/common/utils/_cb_functions';
@@ -26,6 +27,7 @@ export class AdminUpdate {
     private readonly postsService: PostsService,
     private readonly postFormatter: PostFormatterService,
     private readonly voiceTranscriber: VoiceTranscriberService,
+    private readonly usersService: UsersService,
     private readonly adminService: AdminService,
   ) {}
 
@@ -56,6 +58,45 @@ export class AdminUpdate {
       `✨ <b>Formatlangan post ko'rinishi:</b>\n\n${beautified}\n\n` +
       `<i>Quyidagi variantlardan birini tanlang:</i>`
     );
+  }
+
+  @On('my_chat_member')
+  async onMyChatMember(@Ctx() ctx: Context) {
+    try {
+      const update = ctx.update as any;
+      const chatMember = update.my_chat_member;
+      if (!chatMember) return;
+
+      const newStatus = chatMember.new_chat_member?.status;
+      const fromUser = chatMember.from;
+      const chat = chatMember.chat;
+
+      // Agar bot yangi qo'shilgan yoki admin qilingan bo'lsa
+      if (['administrator', 'member'].includes(newStatus)) {
+        const isAllowed = await this.usersService.isUserAllowed(BigInt(fromUser.id));
+
+        if (!isAllowed) {
+          this.logger.warn(
+            `Ruxsatsiz shaxs (${fromUser.id} / @${fromUser.username}) botni chatga (${chat.id} / "${chat.title}") qo'shishga urindi. Bot chatdan chiqib ketmoqda...`,
+          );
+
+          try {
+            await ctx.reply(
+              '⚠️ <b>Ruxsatsiz ulanish!</b>\n\nUshbu bot faqat ruxsat etilgan ma\'murlar tomonidan boshqariladi. Bot chatni tark etmoqda.',
+              { parse_mode: 'HTML' },
+            );
+          } catch (e) {}
+
+          await ctx.telegram.leaveChat(chat.id);
+        } else {
+          this.logger.log(
+            `Ruxsat berilgan admin (${fromUser.id}) botni chatga (${chat.id} / "${chat.title}") muvaffaqiyatli uladi.`,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error('onMyChatMember da xatolik:', error);
+    }
   }
 
   @Start()

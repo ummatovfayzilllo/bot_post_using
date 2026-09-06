@@ -19,6 +19,12 @@ export class UserFilterGuard implements CanActivate {
         return true;
       }
 
+      // Agar bu botning guruh/kanalga qo'shilish hodisasi bo'lsa, handlerga o'tishiga ruxsat beramiz
+      const update = ctx.update as any;
+      if (update && update.my_chat_member) {
+        return true;
+      }
+
       const userId = BigInt(ctx.from.id);
       const isAllowed = await this.usersService.isUserAllowed(userId);
 
