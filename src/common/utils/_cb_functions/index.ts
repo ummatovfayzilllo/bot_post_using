@@ -100,9 +100,9 @@ export class CallbackKeyboardBuilder {
 
   static postDetailKeyboard(postId: string, status: string, text?: string) {
     const rows: any[] = [];
+    const cleanText = (text || '').replace(/<[^>]*>/g, '');
 
     if (status === 'SCHEDULED') {
-      const cleanText = (text || '').replace(/<[^>]*>/g, '');
       rows.push([
         Markup.button.switchToCurrentChat('✏️ Matnni tahrirlash', cleanText),
       ]);
@@ -110,13 +110,18 @@ export class CallbackKeyboardBuilder {
         Markup.button.callback('⚡️ Darhol yuborish', `send_now:${postId}`),
         Markup.button.callback('🗑 O\'chirish', `delete_post:${postId}`),
       ]);
+      rows.push([Markup.button.callback('⬅️ Orqaga', 'back_to_posts:SCHEDULED')]);
     } else {
+      if (cleanText) {
+        rows.push([
+          Markup.button.switchToCurrentChat('🔄 Qayta yuborish / Tahrirlash', cleanText),
+        ]);
+      }
       rows.push([
         Markup.button.callback('🗑 O\'chirish', `delete_post:${postId}`),
       ]);
+      rows.push([Markup.button.callback('⬅️ Orqaga', 'back_to_posts:SENT')]);
     }
-
-    rows.push([Markup.button.callback('⬅️ Orqaga', 'back_to_posts')]);
 
     return Markup.inlineKeyboard(rows);
   }

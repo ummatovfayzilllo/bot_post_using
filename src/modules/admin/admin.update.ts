@@ -1016,13 +1016,15 @@ export class AdminUpdate {
         return;
       }
 
-      // Agar post kutilayotgan holatda bo'lsa, foydalanuvchi to'g'ridan-to'g'ri yangi matn kiritib tahrirlashi uchun state o'rnatamiz
+      // Agar post kutilayotgan holatda bo'lsa, tahrirlash uchun state o'rnatamiz, aks holda (arxiv bo'lsa) holatni tozalaymiz
       if (post.status === 'SCHEDULED') {
         await this.stateService.setState({
           userId,
           step: BotWizardStep.EDITING_EXISTING_POST,
           editingPostId: post.id,
         });
+      } else {
+        await this.stateService.clearState(userId);
       }
 
       const previewText = MessageGenerator.postPreviewMessage({
@@ -1171,20 +1173,31 @@ export class AdminUpdate {
     }
   }
 
-  @Action('back_to_posts')
+  @Action(/back_to_posts(?::(.+))?/)
   async onBackToPosts(@Ctx() ctx: Context) {
     try {
-      const posts = await this.postsService.listPosts('SCHEDULED');
-      let text = '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n';
+      if (ctx.from) {
+        await this.stateService.clearState(BigInt(ctx.from.id));
+      }
 
+      const match = (ctx as any).match;
+      const category: 'SCHEDULED' | 'SENT' = (match && match[1] === 'SENT') ? 'SENT' : 'SCHEDULED';
+
+      const posts = await this.postsService.listPosts(category);
+      const title =
+        category === 'SCHEDULED'
+          ? '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n'
+          : '🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n';
+
+      let text = title;
       if (posts.length === 0) {
-        text += '<i>Kutilayotgan e\'lonlar mavjud emas.</i>';
+        text += '<i>Ushbu toifada e\'lonlar mavjud emas.</i>';
       }
 
       await this.safeEditMessageText(
         ctx,
         text,
-        CallbackKeyboardBuilder.postsListKeyboard(posts, 'SCHEDULED'),
+        CallbackKeyboardBuilder.postsListKeyboard(posts, category),
       );
       await ctx.answerCbQuery();
     } catch (error) {
