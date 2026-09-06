@@ -277,6 +277,25 @@ export class PostsService implements OnModuleInit {
     }
   }
 
+  async updatePostText(postId: string, newText: string) {
+    try {
+      const updated = await this.prisma.post.update({
+        where: { id: postId },
+        data: { text: newText },
+      });
+
+      await this.postBackupModel.updateOne(
+        { postId },
+        { $set: { text: newText } },
+      );
+
+      return { success: true, post: updated };
+    } catch (error) {
+      this.logger.error(`updatePostText (${postId}) da xatolik:`, error);
+      return { success: false, message: error.message };
+    }
+  }
+
   async deletePost(postId: string) {
     try {
       // Navbatdan o'chiramiz

@@ -98,10 +98,14 @@ export class CallbackKeyboardBuilder {
     return Markup.inlineKeyboard(inlineRows);
   }
 
-  static postDetailKeyboard(postId: string, status: string) {
+  static postDetailKeyboard(postId: string, status: string, text?: string) {
     const rows: any[] = [];
 
     if (status === 'SCHEDULED') {
+      const cleanText = (text || '').replace(/<[^>]*>/g, '');
+      rows.push([
+        Markup.button.switchToCurrentChat('✏️ Matnni tahrirlash', cleanText),
+      ]);
       rows.push([
         Markup.button.callback('⚡️ Darhol yuborish', `send_now:${postId}`),
         Markup.button.callback('🗑 O\'chirish', `delete_post:${postId}`),

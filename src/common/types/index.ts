@@ -8,6 +8,7 @@ export enum BotWizardStep {
   CONFIRMING = 'CONFIRMING',
   ADDING_CHANNEL = 'ADDING_CHANNEL',
   ADDING_GROUP = 'ADDING_GROUP',
+  EDITING_EXISTING_POST = 'EDITING_EXISTING_POST',
 }
 
 export interface UserSessionState {

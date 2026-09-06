@@ -251,6 +251,43 @@ export class AdminUpdate {
           break;
         }
 
+        case BotWizardStep.EDITING_EXISTING_POST: {
+          if (!state.editingPostId) {
+            await ctx.reply('⚠️ Tahrirlanayotgan post topilmadi.');
+            await this.stateService.clearState(userId);
+            break;
+          }
+
+          let editedText = text;
+          editedText = editedText.replace(/^@\w+\s*/, '').trim();
+
+          const updateResult = await this.postsService.updatePostText(state.editingPostId, editedText);
+          if (updateResult.success) {
+            await ctx.reply('✅ <b>Post matni muvaffaqiyatli yangilandi!</b>', { parse_mode: 'HTML' });
+
+            const updatedPost = await this.postsService.getPostDetail(state.editingPostId);
+            if (updatedPost) {
+              const previewText = MessageGenerator.postPreviewMessage({
+                text: updatedPost.text,
+                mediaType: updatedPost.mediaType,
+                scheduledAt: updatedPost.scheduledAt,
+                status: updatedPost.status,
+                targetsCount: updatedPost.targets.length,
+                createdAt: updatedPost.createdAt,
+              });
+
+              await this.safeReply(
+                ctx,
+                previewText,
+                CallbackKeyboardBuilder.postDetailKeyboard(updatedPost.id, updatedPost.status, updatedPost.text || undefined),
+              );
+            }
+          } else {
+            await ctx.reply(`❌ Postni yangilashda xatolik: ${updateResult.message}`);
+          }
+          break;
+        }
+
         case BotWizardStep.WAITING_FOR_DATE: {
           const parsedDate = SmartDateParser.parseDate(text);
           if (!parsedDate) {
@@ -969,13 +1006,23 @@ export class AdminUpdate {
   @Action(/view_post:(.+)/)
   async onViewPost(@Ctx() ctx: Context) {
     try {
-      if (!('match' in ctx)) return;
+      if (!ctx.from || !('match' in ctx)) return;
+      const userId = BigInt(ctx.from.id);
       const postId = (ctx as any).match[1];
 
       const post = await this.postsService.getPostDetail(postId);
       if (!post) {
         await ctx.answerCbQuery('Post topilmadi.');
         return;
+      }
+
+      // Agar post kutilayotgan holatda bo'lsa, foydalanuvchi to'g'ridan-to'g'ri yangi matn kiritib tahrirlashi uchun state o'rnatamiz
+      if (post.status === 'SCHEDULED') {
+        await this.stateService.setState({
+          userId,
+          step: BotWizardStep.EDITING_EXISTING_POST,
+          editingPostId: post.id,
+        });
       }
 
       const previewText = MessageGenerator.postPreviewMessage({
@@ -990,7 +1037,7 @@ export class AdminUpdate {
       await this.safeEditMessageText(
         ctx,
         previewText,
-        CallbackKeyboardBuilder.postDetailKeyboard(post.id, post.status),
+        CallbackKeyboardBuilder.postDetailKeyboard(post.id, post.status, post.text || undefined),
       );
       await ctx.answerCbQuery();
     } catch (error) {
