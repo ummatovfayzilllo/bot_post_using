@@ -1,6 +1,7 @@
 export enum BotWizardStep {
   IDLE = 'IDLE',
   WAITING_FOR_CONTENT = 'WAITING_FOR_CONTENT',
+  REVIEWING_AI_FORMAT = 'REVIEWING_AI_FORMAT',
   SELECTING_TARGETS = 'SELECTING_TARGETS',
   CHOOSING_SCHEDULE_TYPE = 'CHOOSING_SCHEDULE_TYPE',
   WAITING_FOR_DATE = 'WAITING_FOR_DATE',
@@ -13,6 +14,8 @@ export interface UserSessionState {
   userId: bigint;
   step: BotWizardStep;
   draftPost?: {
+    rawText?: string;
+    beautifiedText?: string;
     text?: string;
     mediaType?: 'photo' | 'video' | 'document';
     mediaFileId?: string;

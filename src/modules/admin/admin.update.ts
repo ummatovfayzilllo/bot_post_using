@@ -6,6 +6,7 @@ import { StateService } from 'src/core/state.service';
 import { ChannelsService } from 'src/modules/channels/channels.service';
 import { GroupsService } from 'src/modules/groups/groups.service';
 import { PostsService } from 'src/modules/posts/posts.service';
+import { PostFormatterService } from 'src/core/post_formatter.service';
 import { AdminService } from './admin.service';
 import { MessageGenerator } from 'src/common/utils/_message_generator';
 import { CallbackKeyboardBuilder } from 'src/common/utils/_cb_functions';
@@ -21,6 +22,7 @@ export class AdminUpdate {
     private readonly channelsService: ChannelsService,
     private readonly groupsService: GroupsService,
     private readonly postsService: PostsService,
+    private readonly postFormatter: PostFormatterService,
     private readonly adminService: AdminService,
   ) {}
 
@@ -167,7 +169,6 @@ export class AdminUpdate {
       const userId = BigInt(ctx.from.id);
       const text = ctx.message.text.trim();
 
-      // Agar komanda yoki menyu tugmasi bo'lsa
       if (text.startsWith('/') || text.includes('(/')) {
         return;
       }
@@ -176,26 +177,37 @@ export class AdminUpdate {
 
       switch (state.step) {
         case BotWizardStep.WAITING_FOR_CONTENT: {
+          const processingMsg = await ctx.reply('⏳ <i>Post matni AI yordamida chiroyli qilinmoqda...</i>', {
+            parse_mode: 'HTML',
+          });
+
+          const beautified = await this.postFormatter.beautifyPost(text);
+
           state.draftPost = {
             ...state.draftPost,
-            text,
+            rawText: text,
+            beautifiedText: beautified,
+            text: beautified, // default taklif
           };
-          state.step = BotWizardStep.SELECTING_TARGETS;
+          state.step = BotWizardStep.REVIEWING_AI_FORMAT;
           await this.stateService.setState(state);
 
-          const targets = await this.adminService.getAllTargets();
+          try {
+            await ctx.deleteMessage(processingMsg.message_id);
+          } catch (e) {}
+
           await ctx.reply(
-            MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
+            `✨ <b>Formatlangan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
             {
               parse_mode: 'HTML',
-              ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
+              ...CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
             },
           );
           break;
         }
 
         case BotWizardStep.WAITING_FOR_DATE: {
-          const parsedDate = new Date(text.replace(' ', 'T') + ':00+05:00'); // Tashkent Timezone
+          const parsedDate = new Date(text.replace(' ', 'T') + ':00+05:00');
           if (isNaN(parsedDate.getTime()) || parsedDate.getTime() <= Date.now()) {
             await ctx.reply(
               '⚠️ <b>Noto\'g\'ri sana/vaqt formati yoki o\'tgan vaqt kiritildi!</b>\n\nIltimos, qaytadan kiriting:\nMisol: <code>2026-09-07 18:30</code>',
@@ -285,25 +297,56 @@ export class AdminUpdate {
       if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
         const photos = ctx.message.photo;
         const highestPhoto = photos[photos.length - 1];
-        const caption = 'caption' in ctx.message ? ctx.message.caption : '';
+        const caption = 'caption' in ctx.message ? ctx.message.caption || '' : '';
 
-        state.draftPost = {
-          ...state.draftPost,
-          mediaType: 'photo',
-          mediaFileId: highestPhoto.file_id,
-          text: caption || undefined,
-        };
-        state.step = BotWizardStep.SELECTING_TARGETS;
-        await this.stateService.setState(state);
-
-        const targets = await this.adminService.getAllTargets();
-        await ctx.reply(
-          MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
-          {
+        if (caption.trim()) {
+          const processingMsg = await ctx.reply('⏳ <i>Rasm izohi AI orqali chiroyli qilinmoqda...</i>', {
             parse_mode: 'HTML',
-            ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
-          },
-        );
+          });
+
+          const beautified = await this.postFormatter.beautifyPost(caption);
+
+          state.draftPost = {
+            ...state.draftPost,
+            mediaType: 'photo',
+            mediaFileId: highestPhoto.file_id,
+            rawText: caption,
+            beautifiedText: beautified,
+            text: beautified,
+          };
+          state.step = BotWizardStep.REVIEWING_AI_FORMAT;
+          await this.stateService.setState(state);
+
+          try {
+            await ctx.deleteMessage(processingMsg.message_id);
+          } catch (e) {}
+
+          await ctx.reply(
+            `✨ <b>Formatlangan izoh ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
+            {
+              parse_mode: 'HTML',
+              ...CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            },
+          );
+        } else {
+          // Izohsiz rasm bo'lsa to'g'ridan-to'g'ri kanallarni tanlashga o'tadi
+          state.draftPost = {
+            ...state.draftPost,
+            mediaType: 'photo',
+            mediaFileId: highestPhoto.file_id,
+          };
+          state.step = BotWizardStep.SELECTING_TARGETS;
+          await this.stateService.setState(state);
+
+          const targets = await this.adminService.getAllTargets();
+          await ctx.reply(
+            MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
+            {
+              parse_mode: 'HTML',
+              ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
+            },
+          );
+        }
       }
     } catch (error) {
       this.logger.error('onPhoto da xatolik:', error);
@@ -319,28 +362,136 @@ export class AdminUpdate {
 
       if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
         const video = ctx.message.video;
-        const caption = 'caption' in ctx.message ? ctx.message.caption : '';
+        const caption = 'caption' in ctx.message ? ctx.message.caption || '' : '';
 
-        state.draftPost = {
-          ...state.draftPost,
-          mediaType: 'video',
-          mediaFileId: video.file_id,
-          text: caption || undefined,
-        };
-        state.step = BotWizardStep.SELECTING_TARGETS;
-        await this.stateService.setState(state);
-
-        const targets = await this.adminService.getAllTargets();
-        await ctx.reply(
-          MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
-          {
+        if (caption.trim()) {
+          const processingMsg = await ctx.reply('⏳ <i>Video izohi AI orqali chiroyli qilinmoqda...</i>', {
             parse_mode: 'HTML',
-            ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
-          },
-        );
+          });
+
+          const beautified = await this.postFormatter.beautifyPost(caption);
+
+          state.draftPost = {
+            ...state.draftPost,
+            mediaType: 'video',
+            mediaFileId: video.file_id,
+            rawText: caption,
+            beautifiedText: beautified,
+            text: beautified,
+          };
+          state.step = BotWizardStep.REVIEWING_AI_FORMAT;
+          await this.stateService.setState(state);
+
+          try {
+            await ctx.deleteMessage(processingMsg.message_id);
+          } catch (e) {}
+
+          await ctx.reply(
+            `✨ <b>Formatlangan izoh ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
+            {
+              parse_mode: 'HTML',
+              ...CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            },
+          );
+        } else {
+          state.draftPost = {
+            ...state.draftPost,
+            mediaType: 'video',
+            mediaFileId: video.file_id,
+          };
+          state.step = BotWizardStep.SELECTING_TARGETS;
+          await this.stateService.setState(state);
+
+          const targets = await this.adminService.getAllTargets();
+          await ctx.reply(
+            MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
+            {
+              parse_mode: 'HTML',
+              ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
+            },
+          );
+        }
       }
     } catch (error) {
       this.logger.error('onVideo da xatolik:', error);
+    }
+  }
+
+  @Action('accept_ai_format')
+  async onAcceptAiFormat(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from) return;
+      const userId = BigInt(ctx.from.id);
+      const state = await this.stateService.getState(userId);
+
+      state.draftPost = {
+        ...state.draftPost,
+        text: state.draftPost?.beautifiedText || state.draftPost?.rawText,
+      };
+      state.step = BotWizardStep.SELECTING_TARGETS;
+      await this.stateService.setState(state);
+
+      await ctx.answerCbQuery('✨ AI formati qabul qilindi!');
+
+      const targets = await this.adminService.getAllTargets();
+      await ctx.editMessageText(
+        MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
+        {
+          parse_mode: 'HTML',
+          ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
+        },
+      );
+    } catch (error) {
+      this.logger.error('onAcceptAiFormat da xatolik:', error);
+    }
+  }
+
+  @Action('keep_raw_format')
+  async onKeepRawFormat(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from) return;
+      const userId = BigInt(ctx.from.id);
+      const state = await this.stateService.getState(userId);
+
+      state.draftPost = {
+        ...state.draftPost,
+        text: state.draftPost?.rawText || state.draftPost?.beautifiedText,
+      };
+      state.step = BotWizardStep.SELECTING_TARGETS;
+      await this.stateService.setState(state);
+
+      await ctx.answerCbQuery('📝 Asl matn qoldirildi.');
+
+      const targets = await this.adminService.getAllTargets();
+      await ctx.editMessageText(
+        MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
+        {
+          parse_mode: 'HTML',
+          ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
+        },
+      );
+    } catch (error) {
+      this.logger.error('onKeepRawFormat da xatolik:', error);
+    }
+  }
+
+  @Action('rewrite_content')
+  async onRewriteContent(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from) return;
+      const userId = BigInt(ctx.from.id);
+      const state = await this.stateService.getState(userId);
+
+      state.step = BotWizardStep.WAITING_FOR_CONTENT;
+      await this.stateService.setState(state);
+
+      await ctx.answerCbQuery();
+      await ctx.editMessageText(
+        '✏️ <b>Yangi matn yoki mediani yuboring:</b>',
+        { parse_mode: 'HTML' },
+      );
+    } catch (error) {
+      this.logger.error('onRewriteContent da xatolik:', error);
     }
   }
 

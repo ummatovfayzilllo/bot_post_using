@@ -9,6 +9,21 @@ export class CallbackKeyboardBuilder {
     ]).resize();
   }
 
+  static aiFormatReviewKeyboard() {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('✨ AI formatini qabul qilish', 'accept_ai_format'),
+      ],
+      [
+        Markup.button.callback('📝 Asl matnni qoldirish', 'keep_raw_format'),
+        Markup.button.callback('✏️ Qayta yozish', 'rewrite_content'),
+      ],
+      [
+        Markup.button.callback('❌ Bekor qilish', 'cancel_action'),
+      ],
+    ]);
+  }
+
   static selectTargetsKeyboard(targets: TargetItem[], selectedIds: string[]) {
     const inlineRows: any[] = [];
 
