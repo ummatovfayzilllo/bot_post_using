@@ -92,6 +92,31 @@ export class AdminUpdate {
           this.logger.log(
             `Ruxsat berilgan admin (${fromUser.id}) botni chatga (${chat.id} / "${chat.title}") muvaffaqiyatli uladi.`,
           );
+
+          // Guruh yoki kanalni avtomatik tarzda bazaga qo'shamiz va adminga xabar beramiz
+          try {
+            if (chat.type === 'channel') {
+              const res = await this.channelsService.addChannel(chat.id.toString());
+              if (res.success) {
+                await ctx.telegram.sendMessage(
+                  fromUser.id,
+                  `✅ <b>Kanal avtomatik ulandi!</b>\n\n📢 <b>Nomi:</b> ${chat.title || 'Kanal'}\n🆔 <b>Chat ID:</b> <code>${chat.id}</code>\n\n<i>Endi /new_post orqali ushbu kanalga xabarlar yuborishingiz mumkin.</i>`,
+                  { parse_mode: 'HTML' },
+                );
+              }
+            } else if (chat.type === 'group' || chat.type === 'supergroup') {
+              const res = await this.groupsService.addGroup(chat.id.toString());
+              if (res.success) {
+                await ctx.telegram.sendMessage(
+                  fromUser.id,
+                  `✅ <b>Guruh avtomatik ulandi!</b>\n\n👥 <b>Nomi:</b> ${chat.title || 'Guruh'}\n🆔 <b>Chat ID:</b> <code>${chat.id}</code>\n\n<i>Endi /new_post orqali ushbu guruhga xabarlar yuborishingiz mumkin.</i>`,
+                  { parse_mode: 'HTML' },
+                );
+              }
+            }
+          } catch (autoErr) {
+            this.logger.warn(`Avtomatik ulashda ogohlantirish: ${autoErr.message}`);
+          }
         }
       }
     } catch (error) {
