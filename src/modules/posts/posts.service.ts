@@ -279,17 +279,84 @@ export class PostsService implements OnModuleInit {
 
   async updatePostText(postId: string, newText: string) {
     try {
+      const post = await this.prisma.post.findUnique({
+        where: { id: postId },
+        include: {
+          targets: {
+            include: {
+              channel: true,
+              group: true,
+            },
+          },
+        },
+      });
+
+      if (!post) {
+        return { success: false, message: 'Post topilmadi' };
+      }
+
+      let editSuccessCount = 0;
+      let editFailCount = 0;
+
+      // Agar post allaqachon yuborilgan (SENT) bo'lsa, Telegramdagi mavjud xabarlarni tahrirlaymiz
+      if (post.status === 'SENT') {
+        for (const target of post.targets) {
+          if (target.status === 'SENT' && target.messageId) {
+            let chatId: bigint | null = null;
+            if (target.channel) {
+              chatId = target.channel.chatId;
+            } else if (target.group) {
+              chatId = target.group.chatId;
+            }
+
+            if (chatId) {
+              try {
+                if (post.mediaFileId && post.mediaType) {
+                  await this.botConnector.editMessageCaption(chatId, target.messageId, newText);
+                } else {
+                  await this.botConnector.editMessageText(chatId, target.messageId, newText);
+                }
+                editSuccessCount++;
+              } catch (editErr) {
+                editFailCount++;
+                this.logger.warn(
+                  `Telegram xabarini (${chatId}/${target.messageId}) tahrirlashda xatolik: ${editErr.message}`,
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // PostgreSQL da matnni yangilaymiz
       const updated = await this.prisma.post.update({
         where: { id: postId },
         data: { text: newText },
       });
 
+      // MongoDB da matnni yangilaymiz
       await this.postBackupModel.updateOne(
         { postId },
-        { $set: { text: newText } },
+        {
+          $set: { text: newText },
+          $push: {
+            executionLogs: {
+              timestamp: new Date(),
+              status: 'EDITED',
+              editSuccessCount,
+              editFailCount,
+            },
+          },
+        },
       );
 
-      return { success: true, post: updated };
+      return {
+        success: true,
+        post: updated,
+        isSent: post.status === 'SENT',
+        editSuccessCount,
+        editFailCount,
+      };
     } catch (error) {
       this.logger.error(`updatePostText (${postId}) da xatolik:`, error);
       return { success: false, message: error.message };

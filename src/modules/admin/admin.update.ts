@@ -263,7 +263,14 @@ export class AdminUpdate {
 
           const updateResult = await this.postsService.updatePostText(state.editingPostId, editedText);
           if (updateResult.success) {
-            await ctx.reply('✅ <b>Post matni muvaffaqiyatli yangilandi!</b>', { parse_mode: 'HTML' });
+            let msg = '✅ <b>Post matni muvaffaqiyatli yangilandi!</b>';
+            if (updateResult.isSent) {
+              msg = `✅ <b>Yuborilgan xabar Telegramda jonli tahrirlandi!</b>\n📊 Tahrirlangan chatlar: ${updateResult.editSuccessCount} ta`;
+              if (updateResult.editFailCount && updateResult.editFailCount > 0) {
+                msg += ` (Xatolik: ${updateResult.editFailCount} ta)`;
+              }
+            }
+            await ctx.reply(msg, { parse_mode: 'HTML' });
 
             const updatedPost = await this.postsService.getPostDetail(state.editingPostId);
             if (updatedPost) {
@@ -1016,16 +1023,12 @@ export class AdminUpdate {
         return;
       }
 
-      // Agar post kutilayotgan holatda bo'lsa, tahrirlash uchun state o'rnatamiz, aks holda (arxiv bo'lsa) holatni tozalaymiz
-      if (post.status === 'SCHEDULED') {
-        await this.stateService.setState({
-          userId,
-          step: BotWizardStep.EDITING_EXISTING_POST,
-          editingPostId: post.id,
-        });
-      } else {
-        await this.stateService.clearState(userId);
-      }
+      // Post kutilayotgan yoki arxivda bo'lsa ham, tahrirlash uchun state o'rnatamiz
+      await this.stateService.setState({
+        userId,
+        step: BotWizardStep.EDITING_EXISTING_POST,
+        editingPostId: post.id,
+      });
 
       const previewText = MessageGenerator.postPreviewMessage({
         text: post.text,

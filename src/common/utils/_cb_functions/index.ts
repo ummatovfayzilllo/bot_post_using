@@ -114,7 +114,7 @@ export class CallbackKeyboardBuilder {
     } else {
       if (cleanText) {
         rows.push([
-          Markup.button.switchToCurrentChat('🔄 Qayta yuborish / Tahrirlash', cleanText),
+          Markup.button.switchToCurrentChat('✏️ Xabarni tahrirlash', cleanText),
         ]);
       }
       rows.push([

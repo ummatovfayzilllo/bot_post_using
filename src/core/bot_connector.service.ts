@@ -75,4 +75,28 @@ export class BotConnectorService {
       throw error;
     }
   }
+
+  async editMessageText(chatId: string | number | bigint, messageId: number, text: string, extra?: any) {
+    try {
+      return await this.bot.telegram.editMessageText(chatId.toString(), messageId, undefined, text, {
+        parse_mode: 'HTML',
+        ...extra,
+      });
+    } catch (error) {
+      this.logger.error(`editMessageText (${chatId}/${messageId}) da xatolik:`, error);
+      throw error;
+    }
+  }
+
+  async editMessageCaption(chatId: string | number | bigint, messageId: number, caption: string, extra?: any) {
+    try {
+      return await this.bot.telegram.editMessageCaption(chatId.toString(), messageId, undefined, caption, {
+        parse_mode: 'HTML',
+        ...extra,
+      });
+    } catch (error) {
+      this.logger.error(`editMessageCaption (${chatId}/${messageId}) da xatolik:`, error);
+      throw error;
+    }
+  }
 }
