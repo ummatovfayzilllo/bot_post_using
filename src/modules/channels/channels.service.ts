@@ -67,13 +67,21 @@ export class ChannelsService {
         };
       }
 
-      const isAdmin = chatMember.status === 'administrator' || chatMember.status === 'creator';
-      const canPost = Boolean(chatMember.can_post_messages || chatMember.status === 'creator');
+      const isCreator = chatMember.status === 'creator';
+      const isAdmin = chatMember.status === 'administrator' || isCreator;
+      const canPost = Boolean(isCreator || chatMember.can_post_messages);
 
       if (!isAdmin) {
         return {
           success: false,
-          message: `Bot "${chat.title}" kanalida administrator emas. Iltimos, avval botni administrator qiling.`,
+          message: `⚠️ Bot "${chat.title}" kanalida administrator emas.\nIltimos, avval botni (@${botInfo.username}) kanalga administrator qilib qo'shing.`,
+        };
+      }
+
+      if (!canPost) {
+        return {
+          success: false,
+          message: `⚠️ Bot "${chat.title}" kanalida administrator, lekin unda "Post yuborish (Post Messages)" huquqi yo'q!\nIltimos, bot admin huquqlarida xabar yozish ruxsatini yoqing.`,
         };
       }
 

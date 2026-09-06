@@ -1,12 +1,55 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf, Context } from 'telegraf';
 
+export interface BotMetadata {
+  id: number;
+  name: string;
+  username: string;
+}
+
 @Injectable()
-export class BotConnectorService {
+export class BotConnectorService implements OnModuleInit {
   private readonly logger = new Logger(BotConnectorService.name);
+  private static botMetadata: BotMetadata = {
+    id: 0,
+    name: 'Post Bot',
+    username: 'bot',
+  };
 
   constructor(@InjectBot() private readonly bot: Telegraf<Context>) {}
+
+  async onModuleInit() {
+    try {
+      const me = await this.bot.telegram.getMe();
+      if (me) {
+        BotConnectorService.botMetadata = {
+          id: me.id,
+          name: me.first_name || 'Post Bot',
+          username: me.username || '',
+        };
+        this.logger.log(`🤖 Bot ma'lumotlari yuklandi: ${me.first_name} (@${me.username}) [ID: ${me.id}]`);
+      }
+    } catch (error) {
+      this.logger.error('Bot ma\'lumotlarini boshlang\'ich yuklashda xatolik:', error);
+    }
+  }
+
+  static getMetadata(): BotMetadata {
+    return this.botMetadata;
+  }
+
+  static getBotName(): string {
+    return this.botMetadata.name;
+  }
+
+  static getBotUsername(): string {
+    return this.botMetadata.username ? `@${this.botMetadata.username}` : '';
+  }
+
+  static getRawUsername(): string {
+    return this.botMetadata.username;
+  }
 
   getBot(): Telegraf<Context> {
     return this.bot;
@@ -18,10 +61,18 @@ export class BotConnectorService {
 
   async getBotInfo() {
     try {
-      return await this.bot.telegram.getMe();
+      const me = await this.bot.telegram.getMe();
+      if (me) {
+        BotConnectorService.botMetadata = {
+          id: me.id,
+          name: me.first_name || 'Post Bot',
+          username: me.username || '',
+        };
+      }
+      return me;
     } catch (error) {
       this.logger.error('Bot ma\'lumotlarini olishda xatolik:', error);
-      return null;
+      return BotConnectorService.botMetadata.id ? (BotConnectorService.botMetadata as any) : null;
     }
   }
 

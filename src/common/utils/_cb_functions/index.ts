@@ -82,7 +82,12 @@ export class CallbackKeyboardBuilder {
     ]);
   }
 
-  static postsListKeyboard(posts: any[], category: 'SCHEDULED' | 'SENT') {
+  static postsListKeyboard(
+    posts: any[],
+    category: 'SCHEDULED' | 'SENT',
+    page: number = 1,
+    totalPages: number = 1,
+  ) {
     const inlineRows: any[] = [];
 
     for (const post of posts) {
@@ -94,6 +99,25 @@ export class CallbackKeyboardBuilder {
       inlineRows.push([
         Markup.button.callback(`📌 ${previewTitle}`, `view_post:${post.id}`),
       ]);
+    }
+
+    // Pagination row (if more than 1 page)
+    if (totalPages > 1) {
+      const paginationRow: any[] = [];
+      if (page > 1) {
+        paginationRow.push(
+          Markup.button.callback('⬅️ Oldingi', `page_posts:${category}:${page - 1}`),
+        );
+      }
+      paginationRow.push(
+        Markup.button.callback(`📄 ${page}/${totalPages}`, `noop`),
+      );
+      if (page < totalPages) {
+        paginationRow.push(
+          Markup.button.callback('Keyingi ➡️', `page_posts:${category}:${page + 1}`),
+        );
+      }
+      inlineRows.push(paginationRow);
     }
 
     // Category switch

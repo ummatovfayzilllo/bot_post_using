@@ -1,10 +1,17 @@
 import { BotWizardStep, TargetItem } from 'src/common/types';
+import { BotConnectorService } from 'src/core/bot_connector.service';
 
 export class MessageGenerator {
+  static breadcrumb(...steps: string[]): string {
+    if (!steps || steps.length === 0) return '';
+    return `📍 <i>${steps.filter(Boolean).join(' ❯ ')}</i>\n\n`;
+  }
+
   static welcomeMessage(userName: string): string {
+    const botName = BotConnectorService.getBotName() || 'Post Bot';
     return (
       `👋 Assalomu alaykum, <b>${userName}</b>!\n\n` +
-      `🤖 <b>Bot Post Using</b> — e'lon va xabarlarni kanallar hamda guruhlarga avtomatlashtirilgan holda yuborish tizimiga xush kelibsiz.\n\n` +
+      `🤖 <b>${botName}</b> — e'lon va xabarlarni kanallar hamda guruhlarga avtomatlashtirilgan holda yuborish tizimiga xush kelibsiz.\n\n` +
       `📌 <b>Mavjud buyruqlar:</b>\n` +
       `▫️ /new_post — Yangi e'lon yaratish\n` +
       `▫️ /posts — E'lonlar ro'yxati va boshqaruvi\n` +
@@ -20,6 +27,7 @@ export class MessageGenerator {
 
   static askPostContent(): string {
     return (
+      `${MessageGenerator.breadcrumb('Bosh menyu', '📝 Yangi E\'lon', '1️⃣ Matn / Media')}` +
       `📝 <b>1-Qadam: E'lon matnini yoki mediasini (rasm/video/hujjat) yuboring.</b>\n\n` +
       `<i>Eslatma: Matn bilan birga rasm yuborishingiz ham mumkin.</i>`
     );
@@ -33,6 +41,7 @@ export class MessageGenerator {
       );
     }
     return (
+      `${MessageGenerator.breadcrumb('Bosh menyu', '📝 Yangi E\'lon', '2️⃣ Chatlarni tanlash')}` +
       `🎯 <b>2-Qadam: E'lon yuboriladigan maqsadli chatlarni tanlang:</b>\n\n` +
       `Quyidagi tugmalar orqali belgilang va yakunlanganda <b>"Davom etish ➡️"</b> tugmasini bosing:`
     );
@@ -40,6 +49,7 @@ export class MessageGenerator {
 
   static chooseScheduleTypeMessage(): string {
     return (
+      `${MessageGenerator.breadcrumb('Bosh menyu', '📝 Yangi E\'lon', '3️⃣ Vaqtni belgilash')}` +
       `⏱ <b>3-Qadam: E'lonni qachon yuborishni tanlang:</b>\n\n` +
       `⚡️ <b>Darhol yuborish</b> — Tanlangan chatlarga hoziroq yuboriladi.\n` +
       `⏰ <b>Rejalashtirish (Deadline)</b> — Belgilangan sana va vaqtda avtomatik yuboriladi.`
@@ -54,6 +64,7 @@ export class MessageGenerator {
     });
 
     return (
+      `${MessageGenerator.breadcrumb('Bosh menyu', '📝 Yangi E\'lon', '3️⃣ Vaqtni belgilash')}` +
       `⏰ <b>E'lon yuborilishi kerak bo'lgan vaqtni kiriting:</b>\n\n` +
       `🕒 <b>Hozirgi vaqt:</b> <code>${nowTime}</code>\n\n` +
       `📌 <b>Qulay formatlar:</b>\n` +
@@ -71,6 +82,7 @@ export class MessageGenerator {
     status: string;
     targetsCount: number;
     createdAt: Date;
+    breadcrumb?: string;
   }): string {
     let dateStr = 'Darhol';
     if (post.scheduledAt) {
@@ -84,8 +96,10 @@ export class MessageGenerator {
       statusEmoji = '🔴';
     }
 
+    const bc = post.breadcrumb ? `${post.breadcrumb}` : '';
+
     return (
-      `📋 <b>E'LON TAFSILOTLARI:</b>\n` +
+      `${bc}📋 <b>E'LON TAFSILOTLARI:</b>\n` +
       `────────────────────────\n` +
       `📊 <b>Holati:</b> ${statusEmoji} ${post.status}\n` +
       `🎯 <b>Chatlar soni:</b> ${post.targetsCount} ta\n` +

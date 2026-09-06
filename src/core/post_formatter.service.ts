@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { BotConnectorService } from './bot_connector.service';
 import { execFile } from 'child_process';
 
 export interface AiAnalysisResult {
@@ -23,8 +24,9 @@ export class PostFormatterService {
       const channelList = channels.map((c) => `${c.title}${c.username ? ` (@${c.username})` : ''}`).join(', ') || 'Hozircha yo\'q';
       const groupList = groups.map((g) => `${g.title}${g.username ? ` (@${g.username})` : ''}`).join(', ') || 'Hozircha yo\'q';
 
+      const botName = BotConnectorService.getBotName() || 'Post Bot';
       return (
-        `Sen "Bot Post Using" Telegram botining rasmiy aqlli AI assistenti va SMM mutaxassisisan.\n\n` +
+        `Sen "${botName}" Telegram botining rasmiy aqlli AI assistenti va SMM mutaxassisisan.\n\n` +
         `BOTNING ASOSIY VAZIFASI VA BUYRUQLARI:\n` +
         `- /new_post — Kanallar va guruhlarga yangi e'lon yaratish (matn, rasm, video yoki ovozli xabar orqali).\n` +
         `- /channels va /groups — Kanal va guruhlarni qo'shish hamda botning admin huquqini tekshirish (Health Check).\n` +
@@ -37,7 +39,8 @@ export class PostFormatterService {
         `- Yuborilgan (arxiv) postlar soni: ${sentCount} ta\n`
       );
     } catch (e) {
-      return `Sen "Bot Post Using" Telegram botining rasmiy AI assistentisan.\n`;
+      const botName = BotConnectorService.getBotName() || 'Post Bot';
+      return `Sen "${botName}" Telegram botining rasmiy AI assistentisan.\n`;
     }
   }
 

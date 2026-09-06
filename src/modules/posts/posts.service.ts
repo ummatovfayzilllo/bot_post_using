@@ -243,21 +243,44 @@ export class PostsService implements OnModuleInit {
     }
   }
 
-  async listPosts(category: 'SCHEDULED' | 'SENT') {
+  async listPosts(category: 'SCHEDULED' | 'SENT', page: number = 1, limit: number = 10) {
     try {
-      return await this.prisma.post.findMany({
-        where: {
-          status: category,
-        },
-        include: {
-          targets: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 30,
-      });
+      const skip = (page - 1) * limit;
+      const [posts, totalCount] = await Promise.all([
+        this.prisma.post.findMany({
+          where: {
+            status: category,
+          },
+          include: {
+            targets: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        this.prisma.post.count({
+          where: {
+            status: category,
+          },
+        }),
+      ]);
+
+      const totalPages = Math.ceil(totalCount / limit) || 1;
+
+      return {
+        posts,
+        totalCount,
+        page,
+        totalPages,
+      };
     } catch (error) {
       this.logger.error(`listPosts (${category}) da xatolik:`, error);
-      return [];
+      return {
+        posts: [],
+        totalCount: 0,
+        page: 1,
+        totalPages: 1,
+      };
     }
   }
 

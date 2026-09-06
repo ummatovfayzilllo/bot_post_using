@@ -64,12 +64,27 @@ export class GroupsService {
         };
       }
 
-      const isAdmin = chatMember.status === 'administrator' || chatMember.status === 'creator' || chatMember.status === 'member';
-      const canPost = Boolean(
-        chatMember.status === 'administrator' ||
-        chatMember.status === 'creator' ||
-        chatMember.can_send_messages !== false,
-      );
+      // 1. Bot guruhdan chiqarilgan yoki a'zo emasligini tekshirish
+      if (chatMember.status === 'left' || chatMember.status === 'kicked') {
+        return {
+          success: false,
+          message: `⚠️ Bot "${chat.title}" guruhiga a'zo emas (yoki chiqarib yuborilgan).\nIltimos, avval botni (@${botInfo.username}) guruhga qo'shing va qayta urinib ko'ring!`,
+        };
+      }
+
+      // 2. Xabar yozish huquqini tekshirish
+      const isRestricted = chatMember.status === 'restricted';
+      const canSendMessages = isRestricted ? chatMember.can_send_messages !== false : true;
+
+      if (isRestricted && !canSendMessages) {
+        return {
+          success: false,
+          message: `⚠️ Bot "${chat.title}" guruhida a'zo, lekin unga xabar yuborish (Send Messages) taqiqlangan!`,
+        };
+      }
+
+      const isAdmin = chatMember.status === 'administrator' || chatMember.status === 'creator';
+      const canPost = canSendMessages;
 
       const group = await this.prisma.group.upsert({
         where: { chatId: BigInt(chat.id) },

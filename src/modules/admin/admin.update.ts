@@ -186,8 +186,12 @@ export class AdminUpdate {
   @Hears('📢 Kanallar (/channels)')
   async onChannels(@Ctx() ctx: Context) {
     try {
+      if (ctx.from) {
+        await this.stateService.clearState(BigInt(ctx.from.id));
+      }
       const channels = await this.channelsService.listChannels();
-      let text = '📢 <b>Ulangan Kanallar ro\'yxati:</b>\n\n';
+      const breadcrumb = MessageGenerator.breadcrumb('Bosh menyu', '📢 Kanallar');
+      let text = `${breadcrumb}📢 <b>Ulangan Kanallar ro'yxati:</b>\n\n`;
 
       if (channels.length === 0) {
         text += '<i>Hozircha kanallar qo\'shilmagan.</i>';
@@ -210,8 +214,12 @@ export class AdminUpdate {
   @Hears('👥 Guruhlar (/groups)')
   async onGroups(@Ctx() ctx: Context) {
     try {
+      if (ctx.from) {
+        await this.stateService.clearState(BigInt(ctx.from.id));
+      }
       const groups = await this.groupsService.listGroups();
-      let text = '👥 <b>Ulangan Guruhlar ro\'yxati:</b>\n\n';
+      const breadcrumb = MessageGenerator.breadcrumb('Bosh menyu', '👥 Guruhlar');
+      let text = `${breadcrumb}👥 <b>Ulangan Guruhlar ro'yxati:</b>\n\n`;
 
       if (groups.length === 0) {
         text += '<i>Hozircha guruhlar qo\'shilmagan.</i>';
@@ -234,14 +242,29 @@ export class AdminUpdate {
   @Hears('📋 E\'lonlar (/posts)')
   async onPosts(@Ctx() ctx: Context) {
     try {
-      const posts = await this.postsService.listPosts('SCHEDULED');
-      let text = '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n';
+      if (ctx.from) {
+        await this.stateService.clearState(BigInt(ctx.from.id));
+      }
+      const page = 1;
+      const result = await this.postsService.listPosts('SCHEDULED', page, 10);
+      const pageSuffix = result.totalPages > 1 ? ` (${page}-sahifa)` : '';
+      const breadcrumb = MessageGenerator.breadcrumb('Bosh menyu', '📋 E\'lonlar', `⏰ Kutilayotgan${pageSuffix}`);
+      let text = `${breadcrumb}⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n`;
 
-      if (posts.length === 0) {
+      if (result.posts.length === 0) {
         text += '<i>Kutilayotgan e\'lonlar mavjud emas.</i>';
       }
 
-      await this.safeReply(ctx, text, CallbackKeyboardBuilder.postsListKeyboard(posts, 'SCHEDULED'));
+      await this.safeReply(
+        ctx,
+        text,
+        CallbackKeyboardBuilder.postsListKeyboard(
+          result.posts,
+          'SCHEDULED',
+          result.page,
+          result.totalPages,
+        ),
+      );
     } catch (error) {
       this.logger.error('onPosts da xatolik:', error);
       await ctx.reply('Postlarni yuklashda xatolik yuz berdi.');
@@ -334,6 +357,14 @@ export class AdminUpdate {
 
             const updatedPost = await this.postsService.getPostDetail(state.editingPostId);
             if (updatedPost) {
+              const categoryLabel = updatedPost.status === 'SENT' ? '📁 Arxiv' : '⏰ Kutilayotgan';
+              const breadcrumb = MessageGenerator.breadcrumb(
+                'Bosh menyu',
+                '📋 E\'lonlar',
+                categoryLabel,
+                '🔍 Postni ko\'rish',
+              );
+
               const previewText = MessageGenerator.postPreviewMessage({
                 text: updatedPost.text,
                 mediaType: updatedPost.mediaType,
@@ -341,6 +372,7 @@ export class AdminUpdate {
                 status: updatedPost.status,
                 targetsCount: updatedPost.targets.length,
                 createdAt: updatedPost.createdAt,
+                breadcrumb,
               });
 
               await this.safeReply(
@@ -385,6 +417,7 @@ export class AdminUpdate {
             status: 'SCHEDULED',
             targetsCount: (state.draftPost.selectedTargets || []).length,
             createdAt: new Date(),
+            breadcrumb: MessageGenerator.breadcrumb('Bosh menyu', '📝 Yangi E\'lon', '4️⃣ Tasdiqlash'),
           });
 
           await this.safeReply(ctx, previewText, CallbackKeyboardBuilder.confirmPostKeyboard());
@@ -879,7 +912,7 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/toggle_target:(.+)/)
+  @Action(/^toggle_target:(.+)/)
   async onToggleTarget(@Ctx() ctx: Context) {
     try {
       if (!ctx.from || !('match' in ctx)) return;
@@ -1036,27 +1069,31 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/switch_posts:(.+)/)
+  @Action(/^switch_posts:(.+)/)
   async onSwitchPosts(@Ctx() ctx: Context) {
     try {
       if (!('match' in ctx)) return;
       const category = (ctx as any).match[1] as 'SCHEDULED' | 'SENT';
+      const page = 1;
 
-      const posts = await this.postsService.listPosts(category);
-      const title =
+      const result = await this.postsService.listPosts(category, page, 10);
+      const categoryLabel = category === 'SCHEDULED' ? '⏰ Kutilayotgan' : '📁 Arxiv';
+      const pageSuffix = result.totalPages > 1 ? ` (${page}-sahifa)` : '';
+      const breadcrumb = MessageGenerator.breadcrumb('Bosh menyu', '📋 E\'lonlar', `${categoryLabel}${pageSuffix}`);
+      const categoryTitle =
         category === 'SCHEDULED'
-          ? '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n'
-          : '🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n';
-
-      let text = title;
-      if (posts.length === 0) {
-        text += '<i>Ushbu toifada e\'lonlar mavjud emas.</i>';
-      }
+          ? `${breadcrumb}⏰ <b>Kutilayotgan postlar:</b>`
+          : `${breadcrumb}📁 <b>Arxiv postlar:</b>`;
 
       await this.safeEditMessageText(
         ctx,
-        text,
-        CallbackKeyboardBuilder.postsListKeyboard(posts, category),
+        categoryTitle,
+        CallbackKeyboardBuilder.postsListKeyboard(
+          result.posts,
+          category,
+          result.page,
+          result.totalPages,
+        ),
       );
       await ctx.answerCbQuery();
     } catch (error) {
@@ -1064,25 +1101,71 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/view_post:(.+)/)
+  @Action(/^page_posts:(SCHEDULED|SENT):(\d+)/)
+  async onPagePosts(@Ctx() ctx: Context) {
+    try {
+      if (!('match' in ctx)) return;
+      const category = (ctx as any).match[1] as 'SCHEDULED' | 'SENT';
+      const page = parseInt((ctx as any).match[2], 10) || 1;
+
+      const result = await this.postsService.listPosts(category, page, 10);
+      const categoryLabel = category === 'SCHEDULED' ? '⏰ Kutilayotgan' : '📁 Arxiv';
+      const pageSuffix = result.totalPages > 1 ? ` (${page}-sahifa)` : '';
+      const breadcrumb = MessageGenerator.breadcrumb('Bosh menyu', '📋 E\'lonlar', `${categoryLabel}${pageSuffix}`);
+      const categoryTitle =
+        category === 'SCHEDULED'
+          ? `${breadcrumb}⏰ <b>Kutilayotgan postlar:</b>`
+          : `${breadcrumb}📁 <b>Arxiv postlar:</b>`;
+
+      await this.safeEditMessageText(
+        ctx,
+        categoryTitle,
+        CallbackKeyboardBuilder.postsListKeyboard(
+          result.posts,
+          category,
+          result.page,
+          result.totalPages,
+        ),
+      );
+      await ctx.answerCbQuery();
+    } catch (error) {
+      this.logger.error('onPagePosts da xatolik:', error);
+    }
+  }
+
+  @Action('noop')
+  async onNoop(@Ctx() ctx: Context) {
+    try {
+      await ctx.answerCbQuery();
+    } catch (e) {}
+  }
+
+  @Action(/^view_post:(.+)/)
   async onViewPost(@Ctx() ctx: Context) {
     try {
-      if (!ctx.from || !('match' in ctx)) return;
+      if (!('match' in ctx) || !ctx.from) return;
       const userId = BigInt(ctx.from.id);
       const postId = (ctx as any).match[1];
-
       const post = await this.postsService.getPostDetail(postId);
+
       if (!post) {
         await ctx.answerCbQuery('Post topilmadi.');
         return;
       }
 
-      // Post kutilayotgan yoki arxivda bo'lsa ham, tahrirlash uchun state o'rnatamiz
       await this.stateService.setState({
         userId,
         step: BotWizardStep.EDITING_EXISTING_POST,
-        editingPostId: post.id,
+        editingPostId: postId,
       });
+
+      const categoryLabel = post.status === 'SENT' ? '📁 Arxiv' : '⏰ Kutilayotgan';
+      const breadcrumb = MessageGenerator.breadcrumb(
+        'Bosh menyu',
+        '📋 E\'lonlar',
+        categoryLabel,
+        '🔍 Postni ko\'rish',
+      );
 
       const previewText = MessageGenerator.postPreviewMessage({
         text: post.text,
@@ -1091,12 +1174,17 @@ export class AdminUpdate {
         status: post.status,
         targetsCount: post.targets.length,
         createdAt: post.createdAt,
+        breadcrumb,
       });
 
       await this.safeEditMessageText(
         ctx,
         previewText,
-        CallbackKeyboardBuilder.postDetailKeyboard(post.id, post.status, post.text || undefined),
+        CallbackKeyboardBuilder.postDetailKeyboard(
+          post.id,
+          post.status,
+          post.text || undefined,
+        ),
       );
       await ctx.answerCbQuery();
     } catch (error) {
@@ -1104,13 +1192,13 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/ai_reformat:(.+)/)
+  @Action(/^ai_reformat:(.+)/)
   async onAiReformat(@Ctx() ctx: Context) {
     try {
       if (!ctx.from || !('match' in ctx)) return;
       const userId = BigInt(ctx.from.id);
       const postId = (ctx as any).match[1];
-
+      console.log('onAiReformat: userId:', userId, 'postId:', postId);
       const post = await this.postsService.getPostDetail(postId);
       if (!post || !post.text) {
         await ctx.answerCbQuery('Post matni topilmadi.', { show_alert: true });
@@ -1151,7 +1239,7 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/apply_ai_reformat:(.+)/)
+  @Action(/^apply_ai_reformat:(.+)/)
   async onApplyAiReformat(@Ctx() ctx: Context) {
     try {
       if (!ctx.from || !('match' in ctx)) return;
@@ -1161,6 +1249,7 @@ export class AdminUpdate {
       const state = await this.stateService.getState(userId);
       const reformattedText = state.tempData?.reformattedText;
 
+      console.warn('onApplyAiReformat: reformattedText topilmadi. State:', state);
       if (!reformattedText) {
         await ctx.answerCbQuery('Qayta formatlangan matn topilmadi.', { show_alert: true });
         return;
@@ -1182,6 +1271,14 @@ export class AdminUpdate {
 
         const updatedPost = await this.postsService.getPostDetail(postId);
         if (updatedPost) {
+          const categoryLabel = updatedPost.status === 'SENT' ? '📁 Arxiv' : '⏰ Kutilayotgan';
+          const breadcrumb = MessageGenerator.breadcrumb(
+            'Bosh menyu',
+            '📋 E\'lonlar',
+            categoryLabel,
+            '🔍 Postni ko\'rish',
+          );
+
           const previewText = MessageGenerator.postPreviewMessage({
             text: updatedPost.text,
             mediaType: updatedPost.mediaType,
@@ -1189,6 +1286,7 @@ export class AdminUpdate {
             status: updatedPost.status,
             targetsCount: updatedPost.targets.length,
             createdAt: updatedPost.createdAt,
+            breadcrumb,
           });
 
           await this.safeEditMessageText(
@@ -1209,18 +1307,27 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/cancel_ai_reformat:(.+)/)
+  @Action(/^cancel_ai_reformat:(.+)/)
   async onCancelAiReformat(@Ctx() ctx: Context) {
     try {
       if (!ctx.from || !('match' in ctx)) return;
       const userId = BigInt(ctx.from.id);
       const postId = (ctx as any).match[1];
 
+      console.log('onCancelAiReformat: userId:', userId, 'postId:', postId);
       await this.stateService.clearState(userId);
       await ctx.answerCbQuery('Qayta formatlash bekor qilindi.');
 
       const post = await this.postsService.getPostDetail(postId);
       if (post) {
+        const categoryLabel = post.status === 'SENT' ? '📁 Arxiv' : '⏰ Kutilayotgan';
+        const breadcrumb = MessageGenerator.breadcrumb(
+          'Bosh menyu',
+          '📋 E\'lonlar',
+          categoryLabel,
+          '🔍 Postni ko\'rish',
+        );
+
         const previewText = MessageGenerator.postPreviewMessage({
           text: post.text,
           mediaType: post.mediaType,
@@ -1228,6 +1335,7 @@ export class AdminUpdate {
           status: post.status,
           targetsCount: post.targets.length,
           createdAt: post.createdAt,
+          breadcrumb,
         });
 
         await this.safeEditMessageText(
@@ -1245,7 +1353,7 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/send_now:(.+)/)
+  @Action(/^send_now:(.+)/)
   async onSendNow(@Ctx() ctx: Context) {
     try {
       if (!('match' in ctx)) return;
@@ -1260,7 +1368,7 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/delete_post:(.+)/)
+  @Action(/^delete_post:(.+)/)
   async onDeletePost(@Ctx() ctx: Context) {
     try {
       if (!ctx.from || !('match' in ctx)) return;
@@ -1281,21 +1389,30 @@ export class AdminUpdate {
       } catch (delErr) {}
 
       // Yangilangan postlar ro'yxatini chiqaramiz
-      const posts = await this.postsService.listPosts(category);
+      const result = await this.postsService.listPosts(category, 1, 10);
+      const pageSuffix = result.totalPages > 1 ? ` (1-sahifa)` : '';
+      const categoryLabel = category === 'SCHEDULED' ? '⏰ Kutilayotgan' : '📁 Arxiv';
+      const breadcrumb = MessageGenerator.breadcrumb('Bosh menyu', '📋 E\'lonlar', `${categoryLabel}${pageSuffix}`);
+
       const title =
         category === 'SCHEDULED'
-          ? '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n'
-          : '🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n';
+          ? `${breadcrumb}⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n`
+          : `${breadcrumb}🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n`;
 
       let text = title;
-      if (posts.length === 0) {
+      if (result.posts.length === 0) {
         text += '<i>Ushbu toifada e\'lonlar mavjud emas.</i>';
       }
 
       await this.safeReply(
         ctx,
         text,
-        CallbackKeyboardBuilder.postsListKeyboard(posts, category),
+        CallbackKeyboardBuilder.postsListKeyboard(
+          result.posts,
+          category,
+          result.page,
+          result.totalPages,
+        ),
       );
     } catch (error) {
       this.logger.error('onDeletePost da xatolik:', error);
@@ -1324,7 +1441,7 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/delete_channel:(.+)/)
+  @Action(/^delete_channel:(.+)/)
   async onDeleteChannel(@Ctx() ctx: Context) {
     try {
       if (!('match' in ctx)) return;
@@ -1366,7 +1483,7 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/delete_group:(.+)/)
+  @Action(/^delete_group:(.+)/)
   async onDeleteGroup(@Ctx() ctx: Context) {
     try {
       if (!('match' in ctx)) return;
@@ -1403,7 +1520,7 @@ export class AdminUpdate {
     }
   }
 
-  @Action(/back_to_posts(?::(.+))?/)
+  @Action(/^back_to_posts(?::(.+))?/)
   async onBackToPosts(@Ctx() ctx: Context) {
     try {
       if (ctx.from) {
@@ -1412,22 +1529,32 @@ export class AdminUpdate {
 
       const match = (ctx as any).match;
       const category: 'SCHEDULED' | 'SENT' = (match && match[1] === 'SENT') ? 'SENT' : 'SCHEDULED';
+      const page = 1;
 
-      const posts = await this.postsService.listPosts(category);
+      const result = await this.postsService.listPosts(category, page, 10);
+      const categoryLabel = category === 'SCHEDULED' ? '⏰ Kutilayotgan' : '📁 Arxiv';
+      const pageSuffix = result.totalPages > 1 ? ` (${page}-sahifa)` : '';
+      const breadcrumb = MessageGenerator.breadcrumb('Bosh menyu', '📋 E\'lonlar', `${categoryLabel}${pageSuffix}`);
+
       const title =
         category === 'SCHEDULED'
-          ? '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n'
-          : '🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n';
+          ? `${breadcrumb}⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n`
+          : `${breadcrumb}🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n`;
 
       let text = title;
-      if (posts.length === 0) {
+      if (result.posts.length === 0) {
         text += '<i>Ushbu toifada e\'lonlar mavjud emas.</i>';
       }
 
       await this.safeEditMessageText(
         ctx,
         text,
-        CallbackKeyboardBuilder.postsListKeyboard(posts, category),
+        CallbackKeyboardBuilder.postsListKeyboard(
+          result.posts,
+          category,
+          result.page,
+          result.totalPages,
+        ),
       );
       await ctx.answerCbQuery();
     } catch (error) {
