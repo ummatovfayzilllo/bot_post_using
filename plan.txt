@@ -1,0 +1,39 @@
+# bot_post_using
+
+Botdan foydalanuvchi oddiy foydalanuvchiligini hisobga olinishi shart. 
+
+Bu bot kanallar va guruhlarga post joylovchi bo't.
+Shartlari : 
+    Darxol yoki dedline bo'yicha berilgan postni tanlangan kanal yoki guruhlarga yuboruvchi .     [ Chat nomi ]  
+                                                                                            button : ✅     x       
+    Elonlar ro'yhatini Admin boyitadi .
+          /new_post      
+          /posts  
+                Elonlar ro'yhati ,  
+                BUtton : tahrirlash , delete , dedline bo'lsa darhol yuborish funksiyasi, Batafsil yani [ Qachon yaratilgan , kim tomonidan yaratilgan, Holati yuborilgan kutilayotgan, Va alohida                                   Blockda Elonning o'zi.
+                LIst ikkiga bo'linadi , arxiv , kutilayotgan,
+                Yangi elon qo'shish,
+                    
+    Kanal va guruhlarni Admin qo'shadi.
+    Boshlanishiga faqat allowed userId lar bilan qatiy belgilangan userlargina elon qo'sha oladi.
+    
+    Kanalar yoki guruhlarni link, id, kanal username . 
+    Bot kanalga oldin qo'shilganmi buni bot automatik teshirishi va Aniq xabar berishi kerak.
+
+    
+
+Developer talablari :
+  kod eng sodda usulda yozilishi kerak.
+  ternariy emas oddiy if else yoki switch.
+  arraylar bilan ishlashda ham ccalback funksiyalarni soddaroq usulda yozilsin.
+  try catch xar qanday xatolik chiqishi mumkin bo'lgan joyda qo'llash.
+  src/common/utils/_cb_functions   bu yerda calbacklar tayyorlab dry prinsipl qo'llash mumkin.
+  src/common/utils/_message_generator  bu yerda xabarlarni formatlash funksiyalari
+  src/common/config/*   bu yerda configuratsiya sozlamalari olinadi
+  src/common/types/[group_name]/index.ts  bu shakilda typelar yig'iladi  groupname bu typelarni guruhlash uchun flag .
+  src/core/core.module.ts bundan  maxsus servicelar yig'iladi  misol prisma, cache, file_service, bot_connector.ts.
+  src/core/initialition.ts   bu yerga botstrapdan app keladi va barcha sozlamalar shu yerda bitta functionda sozlanadi.
+  src/global/logger , errorhandler , user filter.   Bu yerda global xafsizlik vositalari sozlanadi bundagi sozlamarni ulashda core.module.ts da ulanadi.
+  src/modules/channels ,groupes , admin , posts bu yerdan rest apilar ham chiqrilishi kerak front end web  app kelajakda qo'shiladi.
+  
+  

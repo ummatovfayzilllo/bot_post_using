@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum TargetType {
+  CHANNEL
+  GROUP
+}
+
+model User {
+  id           String   @id @default(uuid())
+  telegramId   BigInt   @unique @map("telegram_id")
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  username     String?  @map("username")
+  isAllowed    Boolean  @default(false) @map("is_allowed")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  posts        Post[]
+
+  @@map("users")
+}
+
+model Channel {
+  id           String       @id @default(uuid())
+  chatId       BigInt       @unique @map("chat_id")
+  title        String
+  username     String?
+  type         TargetType   @default(CHANNEL)
+  hasAdmin     Boolean      @default(true) @map("has_admin")
+  canPost      Boolean      @default(true) @map("can_post")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  postTargets  PostTarget[]
+
+  @@map("channels")
+}
+
+model Group {
+  id           String       @id @default(uuid())
+  chatId       BigInt       @unique @map("chat_id")
+  title        String
+  username     String?
+  type         TargetType   @default(GROUP)
+  hasAdmin     Boolean      @default(true) @map("has_admin")
+  canPost      Boolean      @default(true) @map("can_post")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  postTargets  PostTarget[]
+
+  @@map("groups")
+}
+
+model Post {
+  id           String       @id @default(uuid())
+  text         String?      @db.Text
+  mediaType    String?      @map("media_type") // photo, video, document, etc.
+  mediaFileId  String?      @map("media_file_id")
+  scheduledAt  DateTime?    @map("scheduled_at")
+  sentAt       DateTime?    @map("sent_at")
+  status       PostStatus   @default(DRAFT)
+  createdBy    BigInt       @map("created_by")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  user         User?        @relation(fields: [createdBy], references: [telegramId])
+  targets      PostTarget[]
+
+  @@map("posts")
+}
+
+model PostTarget {
+  id           String     @id @default(uuid())
+  postId       String     @map("post_id")
+  targetType   TargetType @map("target_type")
+  channelId    String?    @map("channel_id")
+  groupId      String?    @map("group_id")
+  status       PostStatus @default(SCHEDULED)
+  errorMessage String?    @map("error_message")
+  messageId    Int?       @map("message_id") // Telegram message_id when sent
+  sentAt       DateTime?  @map("sent_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  post         Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  channel      Channel?   @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  group        Group?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@map("post_targets")
+}
