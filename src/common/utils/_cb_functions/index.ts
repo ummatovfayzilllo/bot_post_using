@@ -26,6 +26,15 @@ export class CallbackKeyboardBuilder {
     ]);
   }
 
+  static reformatConfirmKeyboard(postId: string) {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('✅ Tasdiqlash', `apply_ai_reformat:${postId}`),
+        Markup.button.callback('❌ Bekor qilish', `cancel_ai_reformat:${postId}`),
+      ],
+    ]);
+  }
+
   static selectTargetsKeyboard(targets: TargetItem[], selectedIds: string[]) {
     const inlineRows: any[] = [];
 

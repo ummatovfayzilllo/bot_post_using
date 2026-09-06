@@ -1050,6 +1050,7 @@ export class AdminUpdate {
   async onAiReformat(@Ctx() ctx: Context) {
     try {
       if (!ctx.from || !('match' in ctx)) return;
+      const userId = BigInt(ctx.from.id);
       const postId = (ctx as any).match[1];
 
       const post = await this.postsService.getPostDetail(postId);
@@ -1069,14 +1070,53 @@ export class AdminUpdate {
         await ctx.deleteMessage(loadingMsg.message_id);
       } catch (e) {}
 
-      const updateResult = await this.postsService.updatePostText(postId, beautified);
+      // Vaqtinchalik sessiyada yangi taklif qilingan matnni saqlaymiz
+      await this.stateService.setState({
+        userId,
+        step: BotWizardStep.EDITING_EXISTING_POST,
+        editingPostId: postId,
+        tempData: { reformattedText: beautified },
+      });
+
+      const previewText =
+        `✨ <b>AI taklif qilgan yangi format:</b>\n\n${beautified}\n\n` +
+        `<i>Ushbu yangi formatni qabul qilasizmi?</i>`;
+
+      await this.safeEditMessageText(
+        ctx,
+        previewText,
+        CallbackKeyboardBuilder.reformatConfirmKeyboard(postId),
+      );
+    } catch (error) {
+      this.logger.error('onAiReformat da xatolik:', error);
+      await ctx.reply('AI qayta formatlashda xatolik yuz berdi.');
+    }
+  }
+
+  @Action(/apply_ai_reformat:(.+)/)
+  async onApplyAiReformat(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from || !('match' in ctx)) return;
+      const userId = BigInt(ctx.from.id);
+      const postId = (ctx as any).match[1];
+
+      const state = await this.stateService.getState(userId);
+      const reformattedText = state.tempData?.reformattedText;
+
+      if (!reformattedText) {
+        await ctx.answerCbQuery('Qayta formatlangan matn topilmadi.', { show_alert: true });
+        return;
+      }
+
+      const updateResult = await this.postsService.updatePostText(postId, reformattedText);
+      await this.stateService.clearState(userId);
 
       if (updateResult.success) {
-        let alertMsg = '✅ Post AI yordamida qayta formatlandi!';
+        let alertMsg = '✅ Post AI yordamida yangilandi!';
         if (updateResult.isSent) {
           alertMsg = `✅ Yuborilgan xabar Telegramda jonli tahrirlandi (${updateResult.editSuccessCount} ta chat)!`;
         }
-        await ctx.reply(alertMsg);
+        await ctx.answerCbQuery(alertMsg, { show_alert: true });
 
         const updatedPost = await this.postsService.getPostDetail(postId);
         if (updatedPost) {
@@ -1089,7 +1129,7 @@ export class AdminUpdate {
             createdAt: updatedPost.createdAt,
           });
 
-          await this.safeReply(
+          await this.safeEditMessageText(
             ctx,
             previewText,
             CallbackKeyboardBuilder.postDetailKeyboard(
@@ -1103,8 +1143,43 @@ export class AdminUpdate {
         await ctx.reply(`❌ Xatolik: ${updateResult.message}`);
       }
     } catch (error) {
-      this.logger.error('onAiReformat da xatolik:', error);
-      await ctx.reply('AI qayta formatlashda xatolik yuz berdi.');
+      this.logger.error('onApplyAiReformat da xatolik:', error);
+    }
+  }
+
+  @Action(/cancel_ai_reformat:(.+)/)
+  async onCancelAiReformat(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from || !('match' in ctx)) return;
+      const userId = BigInt(ctx.from.id);
+      const postId = (ctx as any).match[1];
+
+      await this.stateService.clearState(userId);
+      await ctx.answerCbQuery('Qayta formatlash bekor qilindi.');
+
+      const post = await this.postsService.getPostDetail(postId);
+      if (post) {
+        const previewText = MessageGenerator.postPreviewMessage({
+          text: post.text,
+          mediaType: post.mediaType,
+          scheduledAt: post.scheduledAt,
+          status: post.status,
+          targetsCount: post.targets.length,
+          createdAt: post.createdAt,
+        });
+
+        await this.safeEditMessageText(
+          ctx,
+          previewText,
+          CallbackKeyboardBuilder.postDetailKeyboard(
+            post.id,
+            post.status,
+            post.text || undefined,
+          ),
+        );
+      }
+    } catch (error) {
+      this.logger.error('onCancelAiReformat da xatolik:', error);
     }
   }
 
