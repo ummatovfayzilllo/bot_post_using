@@ -1172,31 +1172,28 @@ export class AdminUpdate {
       if (updateResult.success) {
         let alertMsg = '✅ Post AI yordamida yangilandi!';
         if (updateResult.isSent) {
-          alertMsg = `✅ Yuborilgan xabar Telegramda jonli tahrirlandi (${updateResult.editSuccessCount} ta chat)!`;
+          alertMsg = `✅ Xabar yangilandi (${updateResult.editSuccessCount} ta chatda tahrirlandi)!`;
         }
         await ctx.answerCbQuery(alertMsg, { show_alert: true });
 
         const updatedPost = await this.postsService.getPostDetail(postId);
-        if (updatedPost) {
-          const previewText = MessageGenerator.postPreviewMessage({
-            text: updatedPost.text,
-            mediaType: updatedPost.mediaType,
-            scheduledAt: updatedPost.scheduledAt,
-            status: updatedPost.status,
-            targetsCount: updatedPost.targets.length,
-            createdAt: updatedPost.createdAt,
-          });
+        const category: 'SCHEDULED' | 'SENT' = updatedPost?.status === 'SENT' ? 'SENT' : 'SCHEDULED';
+        const posts = await this.postsService.listPosts(category);
+        const title =
+          category === 'SCHEDULED'
+            ? '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n'
+            : '🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n';
 
-          await this.safeEditMessageText(
-            ctx,
-            previewText,
-            CallbackKeyboardBuilder.postDetailKeyboard(
-              updatedPost.id,
-              updatedPost.status,
-              updatedPost.text || undefined,
-            ),
-          );
+        let text = title;
+        if (posts.length === 0) {
+          text += '<i>Ushbu toifada e\'lonlar mavjud emas.</i>';
         }
+
+        await this.safeEditMessageText(
+          ctx,
+          text,
+          CallbackKeyboardBuilder.postsListKeyboard(posts, category),
+        );
       } else {
         await ctx.reply(`❌ Xatolik: ${updateResult.message}`);
       }
@@ -1216,26 +1213,23 @@ export class AdminUpdate {
       await ctx.answerCbQuery('Qayta formatlash bekor qilindi.');
 
       const post = await this.postsService.getPostDetail(postId);
-      if (post) {
-        const previewText = MessageGenerator.postPreviewMessage({
-          text: post.text,
-          mediaType: post.mediaType,
-          scheduledAt: post.scheduledAt,
-          status: post.status,
-          targetsCount: post.targets.length,
-          createdAt: post.createdAt,
-        });
+      const category: 'SCHEDULED' | 'SENT' = post?.status === 'SENT' ? 'SENT' : 'SCHEDULED';
+      const posts = await this.postsService.listPosts(category);
+      const title =
+        category === 'SCHEDULED'
+          ? '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n'
+          : '🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n';
 
-        await this.safeEditMessageText(
-          ctx,
-          previewText,
-          CallbackKeyboardBuilder.postDetailKeyboard(
-            post.id,
-            post.status,
-            post.text || undefined,
-          ),
-        );
+      let text = title;
+      if (posts.length === 0) {
+        text += '<i>Ushbu toifada e\'lonlar mavjud emas.</i>';
       }
+
+      await this.safeEditMessageText(
+        ctx,
+        text,
+        CallbackKeyboardBuilder.postsListKeyboard(posts, category),
+      );
     } catch (error) {
       this.logger.error('onCancelAiReformat da xatolik:', error);
     }
