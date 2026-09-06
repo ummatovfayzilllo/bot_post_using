@@ -286,10 +286,38 @@ export class AdminUpdate {
         }
 
         default: {
-          await ctx.reply(
-            'Bosh menyudasiz. Quyidagi menyulardan birini tanlang:',
-            CallbackKeyboardBuilder.startMenu(),
-          );
+          const processingMsg = await ctx.reply('⏳ <i>Xabaringiz AI tomonidan tahlil qilinmoqda...</i>', {
+            parse_mode: 'HTML',
+          });
+
+          const analysis = await this.postFormatter.analyzeAndProcess(text);
+
+          try {
+            await ctx.deleteMessage(processingMsg.message_id);
+          } catch (e) {}
+
+          if (analysis.type === 'POST') {
+            state.draftPost = {
+              ...state.draftPost,
+              rawText: text,
+              beautifiedText: analysis.content,
+              text: analysis.content,
+            };
+            state.step = BotWizardStep.REVIEWING_AI_FORMAT;
+            await this.stateService.setState(state);
+
+            await this.safeReply(
+              ctx,
+              `✨ <b>E'lon aniqlandi va formatlandi:</b>\n\n${analysis.content}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
+              CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+            );
+          } else {
+            await this.safeReply(
+              ctx,
+              `🤖 <b>AI Yordamchi:</b>\n\n${analysis.content}`,
+              CallbackKeyboardBuilder.startMenu(),
+            );
+          }
           break;
         }
       }
@@ -489,29 +517,28 @@ export class AdminUpdate {
       if (!ctx.from || !ctx.message || !('voice' in ctx.message)) return;
       const userId = BigInt(ctx.from.id);
       const state = await this.stateService.getState(userId);
+      const voice = ctx.message.voice;
 
-      if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
-        const voice = ctx.message.voice;
+      const transcribingMsg = await ctx.reply(
+        '🎙 <i>Ovozli xabar tinglanmoqda va matnga o\'girilmoqda...</i>',
+        { parse_mode: 'HTML' },
+      );
 
-        const transcribingMsg = await ctx.reply(
-          '🎙 <i>Ovozli xabar tinglanmoqda va matnga o\'girilmoqda...</i>',
+      const recognizedText = await this.voiceTranscriber.transcribeVoice(voice.file_id);
+
+      try {
+        await ctx.deleteMessage(transcribingMsg.message_id);
+      } catch (e) {}
+
+      if (!recognizedText || !recognizedText.trim()) {
+        await ctx.reply(
+          '⚠️ <b>Ovozli xabarni tushunib bo\'lmadi.</b>\n\nIltimos, shovqinsiz joyda aniqroq gapirib qaytadan yuboring yoki matn ko\'rinishida yozing.',
           { parse_mode: 'HTML' },
         );
+        return;
+      }
 
-        const recognizedText = await this.voiceTranscriber.transcribeVoice(voice.file_id);
-
-        try {
-          await ctx.deleteMessage(transcribingMsg.message_id);
-        } catch (e) {}
-
-        if (!recognizedText || !recognizedText.trim()) {
-          await ctx.reply(
-            '⚠️ <b>Ovozli xabarni tushunib bo\'lmadi.</b>\n\nIltimos, shovqinsiz joyda aniqroq gapirib qaytadan yuboring yoki matn ko\'rinishida yozing.',
-            { parse_mode: 'HTML' },
-          );
-          return;
-        }
-
+      if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
         const processingMsg = await ctx.reply(
           `📝 <b>Aniqlangan ovoz matni:</b>\n<i>"${recognizedText}"</i>\n\n⏳ <i>AI yordamida chiroyli postga aylantirilmoqda...</i>`,
           { parse_mode: 'HTML' },
@@ -537,6 +564,41 @@ export class AdminUpdate {
           `✨ <b>Ovozdan yaratilgan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
           CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
         );
+      } else {
+        // Erkin ovozli xabar (IDLE holatida)
+        const processingMsg = await ctx.reply(
+          `📝 <b>Aniqlangan ovoz:</b>\n<i>"${recognizedText}"</i>\n\n⏳ <i>AI orqali tahlil qilinmoqda...</i>`,
+          { parse_mode: 'HTML' },
+        );
+
+        const analysis = await this.postFormatter.analyzeAndProcess(recognizedText);
+
+        try {
+          await ctx.deleteMessage(processingMsg.message_id);
+        } catch (e) {}
+
+        if (analysis.type === 'POST') {
+          state.draftPost = {
+            ...state.draftPost,
+            rawText: recognizedText,
+            beautifiedText: analysis.content,
+            text: analysis.content,
+          };
+          state.step = BotWizardStep.REVIEWING_AI_FORMAT;
+          await this.stateService.setState(state);
+
+          await this.safeReply(
+            ctx,
+            `✨ <b>Ovozingizdan e'lon aniqlandi va tayyorlandi:</b>\n\n${analysis.content}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+          );
+        } else {
+          await this.safeReply(
+            ctx,
+            `🤖 <b>AI Yordamchi:</b>\n\n${analysis.content}`,
+            CallbackKeyboardBuilder.startMenu(),
+          );
+        }
       }
     } catch (error) {
       this.logger.error('onVoice da xatolik:', error);
@@ -550,29 +612,28 @@ export class AdminUpdate {
       if (!ctx.from || !ctx.message || !('audio' in ctx.message)) return;
       const userId = BigInt(ctx.from.id);
       const state = await this.stateService.getState(userId);
+      const audio = ctx.message.audio;
 
-      if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
-        const audio = ctx.message.audio;
+      const transcribingMsg = await ctx.reply(
+        '🎙 <i>Audio fayl tinglanmoqda va matnga o\'girilmoqda...</i>',
+        { parse_mode: 'HTML' },
+      );
 
-        const transcribingMsg = await ctx.reply(
-          '🎙 <i>Audio fayl tinglanmoqda va matnga o\'girilmoqda...</i>',
+      const recognizedText = await this.voiceTranscriber.transcribeVoice(audio.file_id);
+
+      try {
+        await ctx.deleteMessage(transcribingMsg.message_id);
+      } catch (e) {}
+
+      if (!recognizedText || !recognizedText.trim()) {
+        await ctx.reply(
+          '⚠️ <b>Audiodan matn ajratib bo\'lmadi.</b>\n\nIltimos, qaytadan yuboring yoki matn ko\'rinishida yozing.',
           { parse_mode: 'HTML' },
         );
+        return;
+      }
 
-        const recognizedText = await this.voiceTranscriber.transcribeVoice(audio.file_id);
-
-        try {
-          await ctx.deleteMessage(transcribingMsg.message_id);
-        } catch (e) {}
-
-        if (!recognizedText || !recognizedText.trim()) {
-          await ctx.reply(
-            '⚠️ <b>Audiodan matn ajratib bo\'lmadi.</b>\n\nIltimos, qaytadan yuboring yoki matn ko\'rinishida yozing.',
-            { parse_mode: 'HTML' },
-          );
-          return;
-        }
-
+      if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
         const beautified = await this.postFormatter.beautifyPost(recognizedText);
 
         state.draftPost = {
@@ -589,6 +650,31 @@ export class AdminUpdate {
           `✨ <b>Audiodan yaratilgan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
           CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
         );
+      } else {
+        const analysis = await this.postFormatter.analyzeAndProcess(recognizedText);
+
+        if (analysis.type === 'POST') {
+          state.draftPost = {
+            ...state.draftPost,
+            rawText: recognizedText,
+            beautifiedText: analysis.content,
+            text: analysis.content,
+          };
+          state.step = BotWizardStep.REVIEWING_AI_FORMAT;
+          await this.stateService.setState(state);
+
+          await this.safeReply(
+            ctx,
+            `✨ <b>Audiodan e'lon tayyorlandi:</b>\n\n${analysis.content}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+          );
+        } else {
+          await this.safeReply(
+            ctx,
+            `🤖 <b>AI Yordamchi:</b>\n\n${analysis.content}`,
+            CallbackKeyboardBuilder.startMenu(),
+          );
+        }
       }
     } catch (error) {
       this.logger.error('onAudio da xatolik:', error);
