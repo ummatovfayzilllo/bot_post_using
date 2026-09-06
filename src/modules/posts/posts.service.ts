@@ -140,6 +140,9 @@ export class PostsService implements OnModuleInit {
         return { success: false, message: 'Post topilmadi' };
       }
 
+      // Agar post navbatda turgan bo'lsa, uni BullMQ navbatidan bekor qilamiz
+      await this.messageQueue.cancelScheduledPost(postId);
+
       const executionLogs: any[] = [];
       let successCount = 0;
       let failCount = 0;
