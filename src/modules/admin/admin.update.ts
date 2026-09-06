@@ -26,6 +26,29 @@ export class AdminUpdate {
     private readonly adminService: AdminService,
   ) {}
 
+  private async safeReply(ctx: Context, text: string, extra: any = {}) {
+    try {
+      return await ctx.reply(text, { parse_mode: 'HTML', ...extra });
+    } catch (err) {
+      this.logger.warn(`HTML parse failed (${err.message}), falling back to plain text.`);
+      // Strip parse_mode and send plain text
+      const fallbackExtra = { ...extra };
+      delete fallbackExtra.parse_mode;
+      return await ctx.reply(text.replace(/<[^>]*>?/gm, ''), fallbackExtra);
+    }
+  }
+
+  private async safeEditMessageText(ctx: Context, text: string, extra: any = {}) {
+    try {
+      return await ctx.editMessageText(text, { parse_mode: 'HTML', ...extra });
+    } catch (err) {
+      this.logger.warn(`HTML editMessageText failed (${err.message}), falling back to plain text.`);
+      const fallbackExtra = { ...extra };
+      delete fallbackExtra.parse_mode;
+      return await ctx.editMessageText(text.replace(/<[^>]*>?/gm, ''), fallbackExtra);
+    }
+  }
+
   @Start()
   async onStart(@Ctx() ctx: Context) {
     try {
@@ -42,10 +65,7 @@ export class AdminUpdate {
       await this.stateService.clearState(userId);
 
       const name = ctx.from.first_name || 'Admin';
-      await ctx.reply(MessageGenerator.welcomeMessage(name), {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.startMenu(),
-      });
+      await this.safeReply(ctx, MessageGenerator.welcomeMessage(name), CallbackKeyboardBuilder.startMenu());
     } catch (error) {
       this.logger.error('onStart da xatolik:', error);
       await ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
@@ -80,7 +100,7 @@ export class AdminUpdate {
         },
       });
 
-      await ctx.reply(MessageGenerator.askPostContent(), { parse_mode: 'HTML' });
+      await this.safeReply(ctx, MessageGenerator.askPostContent());
     } catch (error) {
       this.logger.error('onNewPost da xatolik:', error);
       await ctx.reply('Yangi post jarayonini boshlashda xatolik yuz berdi.');
@@ -104,10 +124,7 @@ export class AdminUpdate {
         });
       }
 
-      await ctx.reply(text, {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.channelsMenuKeyboard(channels),
-      });
+      await this.safeReply(ctx, text, CallbackKeyboardBuilder.channelsMenuKeyboard(channels));
     } catch (error) {
       this.logger.error('onChannels da xatolik:', error);
       await ctx.reply('Kanallarni yuklashda xatolik yuz berdi.');
@@ -131,10 +148,7 @@ export class AdminUpdate {
         });
       }
 
-      await ctx.reply(text, {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.groupsMenuKeyboard(groups),
-      });
+      await this.safeReply(ctx, text, CallbackKeyboardBuilder.groupsMenuKeyboard(groups));
     } catch (error) {
       this.logger.error('onGroups da xatolik:', error);
       await ctx.reply('Guruhlarni yuklashda xatolik yuz berdi.');
@@ -152,10 +166,7 @@ export class AdminUpdate {
         text += '<i>Kutilayotgan e\'lonlar mavjud emas.</i>';
       }
 
-      await ctx.reply(text, {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.postsListKeyboard(posts, 'SCHEDULED'),
-      });
+      await this.safeReply(ctx, text, CallbackKeyboardBuilder.postsListKeyboard(posts, 'SCHEDULED'));
     } catch (error) {
       this.logger.error('onPosts da xatolik:', error);
       await ctx.reply('Postlarni yuklashda xatolik yuz berdi.');
@@ -187,7 +198,7 @@ export class AdminUpdate {
             ...state.draftPost,
             rawText: text,
             beautifiedText: beautified,
-            text: beautified, // default taklif
+            text: beautified,
           };
           state.step = BotWizardStep.REVIEWING_AI_FORMAT;
           await this.stateService.setState(state);
@@ -196,12 +207,10 @@ export class AdminUpdate {
             await ctx.deleteMessage(processingMsg.message_id);
           } catch (e) {}
 
-          await ctx.reply(
+          await this.safeReply(
+            ctx,
             `✨ <b>Formatlangan post ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            {
-              parse_mode: 'HTML',
-              ...CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
-            },
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
           );
           break;
         }
@@ -232,24 +241,23 @@ export class AdminUpdate {
             createdAt: new Date(),
           });
 
-          await ctx.reply(previewText, {
-            parse_mode: 'HTML',
-            ...CallbackKeyboardBuilder.confirmPostKeyboard(),
-          });
+          await this.safeReply(ctx, previewText, CallbackKeyboardBuilder.confirmPostKeyboard());
           break;
         }
 
         case BotWizardStep.ADDING_CHANNEL: {
           const res = await this.channelsService.addChannel(text);
           if (res.success) {
-            await ctx.reply(
+            await this.safeReply(
+              ctx,
               MessageGenerator.channelHealthCheckSuccess(res.title, res.username),
-              { parse_mode: 'HTML', ...CallbackKeyboardBuilder.startMenu() },
+              CallbackKeyboardBuilder.startMenu(),
             );
           } else {
-            await ctx.reply(
+            await this.safeReply(
+              ctx,
               MessageGenerator.channelHealthCheckFailed(text, res.message || 'Noma\'lum xatolik'),
-              { parse_mode: 'HTML', ...CallbackKeyboardBuilder.startMenu() },
+              CallbackKeyboardBuilder.startMenu(),
             );
           }
           await this.stateService.clearState(userId);
@@ -259,14 +267,16 @@ export class AdminUpdate {
         case BotWizardStep.ADDING_GROUP: {
           const res = await this.groupsService.addGroup(text);
           if (res.success) {
-            await ctx.reply(
+            await this.safeReply(
+              ctx,
               `✅ <b>Guruh muvaffaqiyatli qo'shildi!</b>\n\n📌 <b>Nomi:</b> ${res.title}`,
-              { parse_mode: 'HTML', ...CallbackKeyboardBuilder.startMenu() },
+              CallbackKeyboardBuilder.startMenu(),
             );
           } else {
-            await ctx.reply(
+            await this.safeReply(
+              ctx,
               `❌ <b>Guruhni qo'shishda xatolik:</b>\n${res.message}`,
-              { parse_mode: 'HTML', ...CallbackKeyboardBuilder.startMenu() },
+              CallbackKeyboardBuilder.startMenu(),
             );
           }
           await this.stateService.clearState(userId);
@@ -321,15 +331,12 @@ export class AdminUpdate {
             await ctx.deleteMessage(processingMsg.message_id);
           } catch (e) {}
 
-          await ctx.reply(
+          await this.safeReply(
+            ctx,
             `✨ <b>Formatlangan izoh ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            {
-              parse_mode: 'HTML',
-              ...CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
-            },
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
           );
         } else {
-          // Izohsiz rasm bo'lsa to'g'ridan-to'g'ri kanallarni tanlashga o'tadi
           state.draftPost = {
             ...state.draftPost,
             mediaType: 'photo',
@@ -339,17 +346,16 @@ export class AdminUpdate {
           await this.stateService.setState(state);
 
           const targets = await this.adminService.getAllTargets();
-          await ctx.reply(
+          await this.safeReply(
+            ctx,
             MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
-            {
-              parse_mode: 'HTML',
-              ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
-            },
+            CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
           );
         }
       }
     } catch (error) {
       this.logger.error('onPhoto da xatolik:', error);
+      await ctx.reply('Rasmni qabul qilishda xatolik yuz berdi. Iltimos, qaytadan yuboring.');
     }
   }
 
@@ -386,12 +392,10 @@ export class AdminUpdate {
             await ctx.deleteMessage(processingMsg.message_id);
           } catch (e) {}
 
-          await ctx.reply(
+          await this.safeReply(
+            ctx,
             `✨ <b>Formatlangan izoh ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
-            {
-              parse_mode: 'HTML',
-              ...CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
-            },
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
           );
         } else {
           state.draftPost = {
@@ -403,17 +407,77 @@ export class AdminUpdate {
           await this.stateService.setState(state);
 
           const targets = await this.adminService.getAllTargets();
-          await ctx.reply(
+          await this.safeReply(
+            ctx,
             MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
-            {
-              parse_mode: 'HTML',
-              ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
-            },
+            CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
           );
         }
       }
     } catch (error) {
       this.logger.error('onVideo da xatolik:', error);
+      await ctx.reply('Videoni qabul qilishda xatolik yuz berdi. Iltimos, qaytadan yuboring.');
+    }
+  }
+
+  @On('document')
+  async onDocument(@Ctx() ctx: Context) {
+    try {
+      if (!ctx.from || !ctx.message || !('document' in ctx.message)) return;
+      const userId = BigInt(ctx.from.id);
+      const state = await this.stateService.getState(userId);
+
+      if (state.step === BotWizardStep.WAITING_FOR_CONTENT) {
+        const doc = ctx.message.document;
+        const caption = 'caption' in ctx.message ? ctx.message.caption || '' : '';
+
+        if (caption.trim()) {
+          const processingMsg = await ctx.reply('⏳ <i>Hujjat izohi AI orqali chiroyli qilinmoqda...</i>', {
+            parse_mode: 'HTML',
+          });
+
+          const beautified = await this.postFormatter.beautifyPost(caption);
+
+          state.draftPost = {
+            ...state.draftPost,
+            mediaType: 'document',
+            mediaFileId: doc.file_id,
+            rawText: caption,
+            beautifiedText: beautified,
+            text: beautified,
+          };
+          state.step = BotWizardStep.REVIEWING_AI_FORMAT;
+          await this.stateService.setState(state);
+
+          try {
+            await ctx.deleteMessage(processingMsg.message_id);
+          } catch (e) {}
+
+          await this.safeReply(
+            ctx,
+            `✨ <b>Formatlangan izoh ko'rinishi:</b>\n\n${beautified}\n\n───────────────\n<i>Quyidagi variantlardan birini tanlang:</i>`,
+            CallbackKeyboardBuilder.aiFormatReviewKeyboard(),
+          );
+        } else {
+          state.draftPost = {
+            ...state.draftPost,
+            mediaType: 'document',
+            mediaFileId: doc.file_id,
+          };
+          state.step = BotWizardStep.SELECTING_TARGETS;
+          await this.stateService.setState(state);
+
+          const targets = await this.adminService.getAllTargets();
+          await this.safeReply(
+            ctx,
+            MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
+            CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error('onDocument da xatolik:', error);
+      await ctx.reply('Hujjatni qabul qilishda xatolik yuz berdi. Iltimos, qaytadan yuboring.');
     }
   }
 
@@ -434,12 +498,10 @@ export class AdminUpdate {
       await ctx.answerCbQuery('✨ AI formati qabul qilindi!');
 
       const targets = await this.adminService.getAllTargets();
-      await ctx.editMessageText(
+      await this.safeEditMessageText(
+        ctx,
         MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
-        {
-          parse_mode: 'HTML',
-          ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
-        },
+        CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
       );
     } catch (error) {
       this.logger.error('onAcceptAiFormat da xatolik:', error);
@@ -463,12 +525,10 @@ export class AdminUpdate {
       await ctx.answerCbQuery('📝 Asl matn qoldirildi.');
 
       const targets = await this.adminService.getAllTargets();
-      await ctx.editMessageText(
+      await this.safeEditMessageText(
+        ctx,
         MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
-        {
-          parse_mode: 'HTML',
-          ...CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
-        },
+        CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
       );
     } catch (error) {
       this.logger.error('onKeepRawFormat da xatolik:', error);
@@ -486,10 +546,7 @@ export class AdminUpdate {
       await this.stateService.setState(state);
 
       await ctx.answerCbQuery();
-      await ctx.editMessageText(
-        '✏️ <b>Yangi matn yoki mediani yuboring:</b>',
-        { parse_mode: 'HTML' },
-      );
+      await this.safeEditMessageText(ctx, '✏️ <b>Yangi matn yoki mediani yuboring:</b>');
     } catch (error) {
       this.logger.error('onRewriteContent da xatolik:', error);
     }
@@ -542,10 +599,11 @@ export class AdminUpdate {
       state.step = BotWizardStep.CHOOSING_SCHEDULE_TYPE;
       await this.stateService.setState(state);
 
-      await ctx.editMessageText(MessageGenerator.chooseScheduleTypeMessage(), {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.chooseScheduleTypeKeyboard(),
-      });
+      await this.safeEditMessageText(
+        ctx,
+        MessageGenerator.chooseScheduleTypeMessage(),
+        CallbackKeyboardBuilder.chooseScheduleTypeKeyboard(),
+      );
       await ctx.answerCbQuery();
     } catch (error) {
       this.logger.error('onTargetsDone da xatolik:', error);
@@ -579,15 +637,17 @@ export class AdminUpdate {
       await this.stateService.clearState(userId);
 
       if (result.success) {
-        await ctx.reply('✅ <b>E\'lon barcha belgilangan chatlarga yuborildi!</b>', {
-          parse_mode: 'HTML',
-          ...CallbackKeyboardBuilder.startMenu(),
-        });
+        await this.safeReply(
+          ctx,
+          '✅ <b>E\'lon barcha belgilangan chatlarga yuborildi!</b>',
+          CallbackKeyboardBuilder.startMenu(),
+        );
       } else {
-        await ctx.reply(`❌ <b>E\'lon yuborishda xatolik yuz berdi:</b> ${result.message}`, {
-          parse_mode: 'HTML',
-          ...CallbackKeyboardBuilder.startMenu(),
-        });
+        await this.safeReply(
+          ctx,
+          `❌ <b>E\'lon yuborishda xatolik yuz berdi:</b> ${result.message}`,
+          CallbackKeyboardBuilder.startMenu(),
+        );
       }
     } catch (error) {
       this.logger.error('onScheduleInstant da xatolik:', error);
@@ -604,9 +664,7 @@ export class AdminUpdate {
       state.step = BotWizardStep.WAITING_FOR_DATE;
       await this.stateService.setState(state);
 
-      await ctx.editMessageText(MessageGenerator.askScheduleDateMessage(), {
-        parse_mode: 'HTML',
-      });
+      await this.safeEditMessageText(ctx, MessageGenerator.askScheduleDateMessage());
       await ctx.answerCbQuery();
     } catch (error) {
       this.logger.error('onScheduleCustom da xatolik:', error);
@@ -640,15 +698,17 @@ export class AdminUpdate {
       await this.stateService.clearState(userId);
 
       if (result.success) {
-        await ctx.reply(
+        await this.safeReply(
+          ctx,
           `✅ <b>E'lon muvaffaqiyatli rejalashtirildi!</b>\n⏰ Belgilangan vaqtda avtomatik yuboriladi.`,
-          { parse_mode: 'HTML', ...CallbackKeyboardBuilder.startMenu() },
+          CallbackKeyboardBuilder.startMenu(),
         );
       } else {
-        await ctx.reply(`❌ <b>Rejalashtirishda xatolik:</b> ${result.message}`, {
-          parse_mode: 'HTML',
-          ...CallbackKeyboardBuilder.startMenu(),
-        });
+        await this.safeReply(
+          ctx,
+          `❌ <b>Rejalashtirishda xatolik:</b> ${result.message}`,
+          CallbackKeyboardBuilder.startMenu(),
+        );
       }
     } catch (error) {
       this.logger.error('onConfirmPostSend da xatolik:', error);
@@ -672,10 +732,11 @@ export class AdminUpdate {
         text += '<i>Ushbu toifada e\'lonlar mavjud emas.</i>';
       }
 
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.postsListKeyboard(posts, category),
-      });
+      await this.safeEditMessageText(
+        ctx,
+        text,
+        CallbackKeyboardBuilder.postsListKeyboard(posts, category),
+      );
       await ctx.answerCbQuery();
     } catch (error) {
       this.logger.error('onSwitchPosts da xatolik:', error);
@@ -703,10 +764,11 @@ export class AdminUpdate {
         createdAt: post.createdAt,
       });
 
-      await ctx.editMessageText(previewText, {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.postDetailKeyboard(post.id, post.status),
-      });
+      await this.safeEditMessageText(
+        ctx,
+        previewText,
+        CallbackKeyboardBuilder.postDetailKeyboard(post.id, post.status),
+      );
       await ctx.answerCbQuery();
     } catch (error) {
       this.logger.error('onViewPost da xatolik:', error);
@@ -753,10 +815,10 @@ export class AdminUpdate {
         step: BotWizardStep.ADDING_CHANNEL,
       });
 
-      await ctx.editMessageText(
+      await this.safeEditMessageText(
+        ctx,
         '📢 <b>Qo\'shmoqchi bo\'lgan kanalingiz ID si, @username yoki havolasini yuboring:</b>\n\n' +
         '<i>Eslatma: Kanalga avval botni administrator qilib qo\'shganingizga ishonch hosil qiling!</i>',
-        { parse_mode: 'HTML' },
       );
       await ctx.answerCbQuery();
     } catch (error) {
@@ -774,10 +836,11 @@ export class AdminUpdate {
       await ctx.answerCbQuery('Kanal o\'chirildi.');
 
       const channels = await this.channelsService.listChannels();
-      await ctx.editMessageText('📢 <b>Kanallar yangilandi:</b>', {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.channelsMenuKeyboard(channels),
-      });
+      await this.safeEditMessageText(
+        ctx,
+        '📢 <b>Kanallar yangilandi:</b>',
+        CallbackKeyboardBuilder.channelsMenuKeyboard(channels),
+      );
     } catch (error) {
       this.logger.error('onDeleteChannel da xatolik:', error);
     }
@@ -794,10 +857,10 @@ export class AdminUpdate {
         step: BotWizardStep.ADDING_GROUP,
       });
 
-      await ctx.editMessageText(
+      await this.safeEditMessageText(
+        ctx,
         '👥 <b>Qo\'shmoqchi bo\'lgan guruhingiz ID si yoki @username ini yuboring:</b>\n\n' +
         '<i>Eslatma: Guruhga avval botni a\'zo yoki administrator qilib qo\'shganingizga ishonch hosil qiling!</i>',
-        { parse_mode: 'HTML' },
       );
       await ctx.answerCbQuery();
     } catch (error) {
@@ -815,10 +878,11 @@ export class AdminUpdate {
       await ctx.answerCbQuery('Guruh o\'chirildi.');
 
       const groups = await this.groupsService.listGroups();
-      await ctx.editMessageText('👥 <b>Guruhlar yangilandi:</b>', {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.groupsMenuKeyboard(groups),
-      });
+      await this.safeEditMessageText(
+        ctx,
+        '👥 <b>Guruhlar yangilandi:</b>',
+        CallbackKeyboardBuilder.groupsMenuKeyboard(groups),
+      );
     } catch (error) {
       this.logger.error('onDeleteGroup da xatolik:', error);
     }
@@ -847,10 +911,11 @@ export class AdminUpdate {
         text += '<i>Kutilayotgan e\'lonlar mavjud emas.</i>';
       }
 
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...CallbackKeyboardBuilder.postsListKeyboard(posts, 'SCHEDULED'),
-      });
+      await this.safeEditMessageText(
+        ctx,
+        text,
+        CallbackKeyboardBuilder.postsListKeyboard(posts, 'SCHEDULED'),
+      );
       await ctx.answerCbQuery();
     } catch (error) {
       this.logger.error('onBackToPosts da xatolik:', error);
