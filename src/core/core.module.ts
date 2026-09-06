@@ -9,6 +9,7 @@ import { MessageQueueService } from './message_queue.service';
 import { BotConnectorService } from './bot_connector.service';
 import { AppLoggerService } from 'src/global/logger/logger.service';
 import { UserFilterGuard } from 'src/global/user_filter/user_filter.guard';
+import { UsersService } from 'src/modules/users/users.service';
 import { PostFormatterService } from './post_formatter.service';
 import { VoiceTranscriberService } from './voice_transcriber.service';
 import { PostBackup, PostBackupSchema } from './schemas/post-backup.schema';
@@ -50,6 +51,7 @@ import configuration from 'src/common/config/configuration';
     PostFormatterService,
     VoiceTranscriberService,
     AppLoggerService,
+    UsersService,
     UserFilterGuard,
   ],
   exports: [
@@ -61,6 +63,7 @@ import configuration from 'src/common/config/configuration';
     PostFormatterService,
     VoiceTranscriberService,
     AppLoggerService,
+    UsersService,
     UserFilterGuard,
     MongooseModule,
   ],

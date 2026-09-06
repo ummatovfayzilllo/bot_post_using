@@ -4,9 +4,10 @@ import { AdminUpdate } from './admin.update';
 import { ChannelsModule } from '../channels/channels.module';
 import { GroupsModule } from '../groups/groups.module';
 import { PostsModule } from '../posts/posts.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [ChannelsModule, GroupsModule, PostsModule],
+  imports: [ChannelsModule, GroupsModule, PostsModule, UsersModule],
   providers: [AdminService, AdminUpdate],
   exports: [AdminService],
 })

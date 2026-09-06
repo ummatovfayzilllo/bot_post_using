@@ -1,19 +1,16 @@
 import { CanActivate, ExecutionContext, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { TelegrafExecutionContext } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { MessageGenerator } from 'src/common/utils/_message_generator';
+import { UsersService } from 'src/modules/users/users.service';
 
 @Injectable()
 export class UserFilterGuard implements CanActivate {
   private readonly logger = new Logger(UserFilterGuard.name);
-  private allowedIds: bigint[] = [];
 
-  constructor(private readonly configService: ConfigService) {
-    this.allowedIds = this.configService.get<bigint[]>('bot.allowedUserIds', []);
-  }
+  constructor(private readonly usersService: UsersService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     try {
       const tgContext = TelegrafExecutionContext.create(context);
       const ctx = tgContext.getContext<Context>();
@@ -23,16 +20,12 @@ export class UserFilterGuard implements CanActivate {
       }
 
       const userId = BigInt(ctx.from.id);
+      const isAllowed = await this.usersService.isUserAllowed(userId);
 
-      // Agar ALLOWED_USER_IDS bo'sh bo'lmasa, tekshiramiz
-      if (this.allowedIds.length > 0) {
-        const isAllowed = this.allowedIds.some((allowedId) => allowedId === userId);
-
-        if (!isAllowed) {
-          this.logger.warn(`Ruxsatsiz kirishga urinish: ${ctx.from.id} (@${ctx.from.username || 'noma\'lum'})`);
-          ctx.reply(MessageGenerator.accessDeniedMessage(), { parse_mode: 'HTML' }).catch(() => {});
-          return false;
-        }
+      if (!isAllowed) {
+        this.logger.warn(`Ruxsatsiz kirishga urinish: ${ctx.from.id} (@${ctx.from.username || 'noma\'lum'})`);
+        ctx.reply(MessageGenerator.accessDeniedMessage(), { parse_mode: 'HTML' }).catch(() => {});
+        return false;
       }
 
       return true;

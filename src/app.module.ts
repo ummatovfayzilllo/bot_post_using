@@ -4,6 +4,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { PostsModule } from './modules/posts/posts.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { PostsModule } from './modules/posts/posts.module';
     ChannelsModule,
     GroupsModule,
     PostsModule,
+    UsersModule,
   ],
 })
 export class AppModule {}
