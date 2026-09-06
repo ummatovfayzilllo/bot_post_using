@@ -236,12 +236,11 @@ export class AdminUpdate {
           state.step = BotWizardStep.SELECTING_TARGETS;
           await this.stateService.setState(state);
 
-          await ctx.reply('✏️ <b>Tahrirlangan matn qabul qilindi!</b>', { parse_mode: 'HTML' });
-
           const targets = await this.adminService.getAllTargets();
           await this.safeReply(
             ctx,
-            MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
+            `✏️ <b>Tahrirlangan matn qabul qilindi!</b>\n\n` +
+              MessageGenerator.selectTargetsMessage(targets, state.draftPost.selectedTargets || []),
             CallbackKeyboardBuilder.selectTargetsKeyboard(targets, state.draftPost.selectedTargets || []),
           );
           break;
@@ -259,14 +258,13 @@ export class AdminUpdate {
 
           const updateResult = await this.postsService.updatePostText(state.editingPostId, editedText);
           if (updateResult.success) {
-            let msg = '✅ <b>Post matni muvaffaqiyatli yangilandi!</b>';
+            let msgHeader = '✅ <b>Post matni muvaffaqiyatli yangilandi!</b>';
             if (updateResult.isSent) {
-              msg = `✅ <b>Yuborilgan xabar Telegramda jonli tahrirlandi!</b>\n📊 Tahrirlangan chatlar: ${updateResult.editSuccessCount} ta`;
+              msgHeader = `✅ <b>Yuborilgan xabar Telegramda jonli tahrirlandi!</b> (${updateResult.editSuccessCount} ta chat)`;
               if (updateResult.editFailCount && updateResult.editFailCount > 0) {
-                msg += ` (Xatolik: ${updateResult.editFailCount} ta)`;
+                msgHeader += ` (Xatolik: ${updateResult.editFailCount} ta)`;
               }
             }
-            await ctx.reply(msg, { parse_mode: 'HTML' });
 
             const updatedPost = await this.postsService.getPostDetail(state.editingPostId);
             if (updatedPost) {
@@ -281,7 +279,7 @@ export class AdminUpdate {
 
               await this.safeReply(
                 ctx,
-                previewText,
+                `${msgHeader}\n\n${previewText}`,
                 CallbackKeyboardBuilder.postDetailKeyboard(updatedPost.id, updatedPost.status, updatedPost.text || undefined),
               );
             }
@@ -900,17 +898,13 @@ export class AdminUpdate {
       await this.stateService.clearState(userId);
 
       if (result.success) {
-        await this.safeReply(
-          ctx,
-          '✅ <b>E\'lon barcha belgilangan chatlarga yuborildi!</b>',
-          CallbackKeyboardBuilder.startMenu(),
-        );
+        await ctx.editMessageText('✅ <b>E\'lon barcha belgilangan chatlarga muvaffaqiyatli yuborildi!</b>', {
+          parse_mode: 'HTML',
+        });
       } else {
-        await this.safeReply(
-          ctx,
-          `❌ <b>E\'lon yuborishda xatolik yuz berdi:</b> ${result.message}`,
-          CallbackKeyboardBuilder.startMenu(),
-        );
+        await ctx.editMessageText(`❌ <b>E\'lon yuborishda xatolik yuz berdi:</b> ${result.message}`, {
+          parse_mode: 'HTML',
+        });
       }
     } catch (error) {
       this.logger.error('onScheduleInstant da xatolik:', error);
@@ -961,16 +955,14 @@ export class AdminUpdate {
       await this.stateService.clearState(userId);
 
       if (result.success) {
-        await this.safeReply(
-          ctx,
+        await ctx.editMessageText(
           `✅ <b>E'lon muvaffaqiyatli rejalashtirildi!</b>\n⏰ Belgilangan vaqtda avtomatik yuboriladi.`,
-          CallbackKeyboardBuilder.startMenu(),
+          { parse_mode: 'HTML' },
         );
       } else {
-        await this.safeReply(
-          ctx,
+        await ctx.editMessageText(
           `❌ <b>Rejalashtirishda xatolik:</b> ${result.message}`,
-          CallbackKeyboardBuilder.startMenu(),
+          { parse_mode: 'HTML' },
         );
       }
     } catch (error) {
@@ -1330,8 +1322,12 @@ export class AdminUpdate {
       if (ctx.from) {
         await this.stateService.clearState(BigInt(ctx.from.id));
       }
-      await ctx.answerCbQuery('Amal bekor qilindi.');
-      await ctx.editMessageText('❌ Amal bekor qilindi.');
+      await ctx.answerCbQuery('❌ Amal bekor qilindi.', { show_alert: false });
+      try {
+        await ctx.deleteMessage();
+      } catch (delErr) {
+        await ctx.editMessageText('❌ Amal bekor qilindi.');
+      }
     } catch (error) {
       this.logger.error('onCancelAction da xatolik:', error);
     }
