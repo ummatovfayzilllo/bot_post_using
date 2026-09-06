@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
 import { execFile } from 'child_process';
 
 export interface AiAnalysisResult {
@@ -10,13 +11,46 @@ export interface AiAnalysisResult {
 export class PostFormatterService {
   private readonly logger = new Logger(PostFormatterService.name);
 
+  constructor(private readonly prisma: PrismaService) {}
+
+  private async getSystemContext(): Promise<string> {
+    try {
+      const channels = await this.prisma.channel.findMany({ select: { title: true, username: true } });
+      const groups = await this.prisma.group.findMany({ select: { title: true, username: true } });
+      const scheduledCount = await this.prisma.post.count({ where: { status: 'SCHEDULED' } });
+      const sentCount = await this.prisma.post.count({ where: { status: 'SENT' } });
+
+      const channelList = channels.map((c) => `${c.title}${c.username ? ` (@${c.username})` : ''}`).join(', ') || 'Hozircha yo\'q';
+      const groupList = groups.map((g) => `${g.title}${g.username ? ` (@${g.username})` : ''}`).join(', ') || 'Hozircha yo\'q';
+
+      return (
+        `Sen "Bot Post Using" Telegram botining rasmiy aqlli AI assistenti va SMM mutaxassisisan.\n\n` +
+        `BOTNING ASOSIY VAZIFASI VA BUYRUQLARI:\n` +
+        `- /new_post — Kanallar va guruhlarga yangi e'lon yaratish (matn, rasm, video yoki ovozli xabar orqali).\n` +
+        `- /channels va /groups — Kanal va guruhlarni qo'shish hamda botning admin huquqini tekshirish (Health Check).\n` +
+        `- /posts — Kutilayotgan (rejalashtirilgan) va arxivdagi e'lonlarni ko'rish, darhol yuborish yoki o'chirish.\n` +
+        `- /cancel — Har qanday jarayonni bekor qilish.\n\n` +
+        `[LOYIHANGING REAL-TIME HOLATI]:\n` +
+        `- Ulangan kanallar (${channels.length} ta): ${channelList}\n` +
+        `- Ulangan guruhlar (${groups.length} ta): ${groupList}\n` +
+        `- Kutilayotgan (rejalashtirilgan) postlar soni: ${scheduledCount} ta\n` +
+        `- Yuborilgan (arxiv) postlar soni: ${sentCount} ta\n`
+      );
+    } catch (e) {
+      return `Sen "Bot Post Using" Telegram botining rasmiy AI assistentisan.\n`;
+    }
+  }
+
   async beautifyPost(rawText: string): Promise<string> {
     if (!rawText || !rawText.trim()) {
       return rawText;
     }
 
+    const systemContext = await this.getSystemContext();
+
     const prompt = (
-      `Sen professional Telegram SMM mutaxassisissan. Quyidagi xom matnni Telegram post uchun juda chiroyli, o'qishli, strukturali va diqqatni tortuvchi formatga keltirib ber.\n\n` +
+      `${systemContext}\n` +
+      `Quyidagi xom e'lon matnini Telegram kanallari uchun juda chiroyli, o'qishli, strukturali va diqqatni tortuvchi formatga keltirib ber.\n\n` +
       `QAT'IY QOIDALAR:\n` +
       `1. XAVFSIZ HTML FORMAT: Faqat Telegram qo'llab-quvvatlaydigan to'g'ri yopilgan HTML teglaridan foydalan (<b>, </b>, <i>, </i>, <code>, </code>). Hech qachon noto'g'ri yopilmagan yoki <, > belgilarini o'z holicha qoldirma!\n` +
       `2. ASOSIY MA'LUMOTLARNI SAQLASH: Barcha telefon raqamlar, narxlar, ismlar, @username va havolalar 100% o'zgarmasdan saqlanishi shart.\n` +
@@ -53,14 +87,16 @@ export class PostFormatterService {
       return { type: 'CHAT', content: 'Xabar matni bo\'sh.' };
     }
 
+    const systemContext = await this.getSystemContext();
+
     const prompt = (
-      `Sen professional Telegram AI Assistanti va SMM mutaxassisisan.\n` +
+      `${systemContext}\n` +
       `Quyidagi foydalanuvchi xabarini tahlil qil va mos ravishda ishlov ber:\n\n` +
       `1. Agar xabar kanal/guruhga e'lon qilish uchun mo'ljallangan E'LON yoki POST (oldi-sotdi, mashina, uy, xizmat, yangilik) bo'lsa:\n` +
       `- Uni Telegram uchun mos, chiroyli emojilar va to'g'ri yopilgan HTML (<b>, <i>, <code>) bilan professional formatga keltir.\n` +
       `- JSON shaklida qaytar: {"type": "POST", "content": "<formatlangan_post_matni>"}\n\n` +
-      `2. Agar xabar SAVOL, YORDAM SO'RASH, bot qanday ishlashi haqida yoki ERKIN SUHBAT bo'lsa:\n` +
-      `- Foydalanuvchiga o'zbek tilida muloyim, aniq va tushunarli yordam beruvchi javob yoz.\n` +
+      `2. Agar xabar SAVOL, YORDAM SO'RASH, bot qanday ishlashi haqida, kanallar holati yoki ERKIN SUHBAT bo'lsa:\n` +
+      `- Yuqoridagi [LOYIHANGING REAL-TIME HOLATI] va bot imkoniyatlaridan kelib chiqib, foydalanuvchiga o'zbek tilida muloyim, aniq va tushunarli javob yoz.\n` +
       `- JSON shaklida qaytar: {"type": "CHAT", "content": "<foydalanuvchiga_javob_matni>"}\n\n` +
       `QAT'IY QOIDA: Faqat toza JSON formatida javob qaytar! Hech qanday markdown \`\`\`json blokisiz, toza JSON matnini ber.\n\n` +
       `Foydalanuvchi xabari:\n"""\n${rawText.trim()}\n"""`
@@ -76,7 +112,6 @@ export class PostFormatterService {
           }
 
           let output = stdout.trim();
-          // Tozalash agar ```json bilan o'ralgan bo'lsa
           if (output.startsWith('```json')) {
             output = output.replace(/^```json\s*/, '').replace(/\s*```$/, '');
           } else if (output.startsWith('```')) {
@@ -93,7 +128,6 @@ export class PostFormatterService {
             this.logger.warn(`JSON parse xatosi: ${jsonErr.message}, output: ${output}`);
           }
 
-          // Fallback
           resolve({ type: 'CHAT', content: output || rawText });
         });
       } catch (err) {

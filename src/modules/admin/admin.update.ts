@@ -11,6 +11,7 @@ import { VoiceTranscriberService } from 'src/core/voice_transcriber.service';
 import { AdminService } from './admin.service';
 import { MessageGenerator } from 'src/common/utils/_message_generator';
 import { CallbackKeyboardBuilder } from 'src/common/utils/_cb_functions';
+import { SmartDateParser } from 'src/common/utils/date_parser';
 import { BotWizardStep } from 'src/common/types';
 
 @Update()
@@ -218,10 +219,16 @@ export class AdminUpdate {
         }
 
         case BotWizardStep.WAITING_FOR_DATE: {
-          const parsedDate = new Date(text.replace(' ', 'T') + ':00+05:00');
-          if (isNaN(parsedDate.getTime()) || parsedDate.getTime() <= Date.now()) {
+          const parsedDate = SmartDateParser.parseDate(text);
+          if (!parsedDate) {
+            const nowTime = SmartDateParser.getTashkentNowFormatted();
             await ctx.reply(
-              '⚠️ <b>Noto\'g\'ri sana/vaqt formati yoki o\'tgan vaqt kiritildi!</b>\n\nIltimos, qaytadan kiriting:\nMisol: <code>2026-09-07 18:30</code>',
+              `⚠️ <b>Noto'g'ri vaqt formati yoki o'tgan vaqt kiritildi!</b>\n\n` +
+              `🕒 <b>Hozirgi vaqt:</b> <code>${nowTime}</code>\n\n` +
+              `📌 <b>Qulay misollar:</b>\n` +
+              `▫️ <code>14:30</code> (bugun)\n` +
+              `▫️ <code>+5m</code> yoki <code>10m</code> (daqiqa)\n` +
+              `▫️ <code>2026-09-06 18:00</code> (to'liq sana)`,
               { parse_mode: 'HTML' },
             );
             return;

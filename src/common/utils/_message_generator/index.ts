@@ -47,10 +47,20 @@ export class MessageGenerator {
   }
 
   static askScheduleDateMessage(): string {
+    const nowTime = new Date().toLocaleTimeString('uz-UZ', {
+      timeZone: 'Asia/Tashkent',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     return (
-      `📅 <b>E'lon yuborilishi kerak bo'lgan sana va vaqtni kiriting:</b>\n\n` +
-      `Format: <code>YYYY-MM-DD HH:mm</code>\n` +
-      `Misol uchun: <code>2026-09-07 15:30</code> (O'zbekiston vaqti bilan)`
+      `⏰ <b>E'lon yuborilishi kerak bo'lgan vaqtni kiriting:</b>\n\n` +
+      `🕒 <b>Hozirgi vaqt:</b> <code>${nowTime}</code>\n\n` +
+      `📌 <b>Qulay formatlar:</b>\n` +
+      `▫️ <code>14:30</code> — Bugun soat 14:30 da yuborish\n` +
+      `▫️ <code>+5m</code> yoki <code>10m</code> — 5 yoki 10 daqiqadan so'ng yuborish\n` +
+      `▫️ <code>+1h</code> — 1 soatdan so'ng yuborish\n` +
+      `▫️ <code>2026-09-06 18:00</code> — To'liq sana va vaqt`
     );
   }
 
