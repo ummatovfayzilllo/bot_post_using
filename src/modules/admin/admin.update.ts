@@ -1130,12 +1130,40 @@ export class AdminUpdate {
   @Action(/delete_post:(.+)/)
   async onDeletePost(@Ctx() ctx: Context) {
     try {
-      if (!('match' in ctx)) return;
+      if (!ctx.from || !('match' in ctx)) return;
+      const userId = BigInt(ctx.from.id);
       const postId = (ctx as any).match[1];
 
+      // Post tafsilotlarini o'chirishdan oldin toifani aniqlaymiz
+      const post = await this.postsService.getPostDetail(postId);
+      const category: 'SCHEDULED' | 'SENT' = post?.status === 'SENT' ? 'SENT' : 'SCHEDULED';
+
       await this.postsService.deletePost(postId);
-      await ctx.answerCbQuery('Post o\'chirildi.');
-      await ctx.editMessageText('🗑 Post muvaffaqiyatli o\'chirildi.');
+      await this.stateService.clearState(userId);
+      await ctx.answerCbQuery('🗑 Post o\'chirildi va chat tozalandi.', { show_alert: true });
+
+      // Chatdagi post xabarini tozalaymiz / o'chiramiz
+      try {
+        await ctx.deleteMessage();
+      } catch (delErr) {}
+
+      // Yangilangan postlar ro'yxatini chiqaramiz
+      const posts = await this.postsService.listPosts(category);
+      const title =
+        category === 'SCHEDULED'
+          ? '⏰ <b>Kutilayotgan (Rejalashtirilgan) E\'lonlar:</b>\n\n'
+          : '🗄 <b>Arxiv (Yuborilgan) E\'lonlar:</b>\n\n';
+
+      let text = title;
+      if (posts.length === 0) {
+        text += '<i>Ushbu toifada e\'lonlar mavjud emas.</i>';
+      }
+
+      await this.safeReply(
+        ctx,
+        text,
+        CallbackKeyboardBuilder.postsListKeyboard(posts, category),
+      );
     } catch (error) {
       this.logger.error('onDeletePost da xatolik:', error);
     }
