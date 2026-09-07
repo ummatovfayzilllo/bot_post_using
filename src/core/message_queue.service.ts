@@ -29,11 +29,13 @@ export class MessageQueueService implements OnModuleInit, OnModuleDestroy {
       const host = this.configService.get<string>('redis.host', 'localhost');
       const port = this.configService.get<number>('redis.port', 6379);
       const password = this.configService.get<string>('redis.password');
+      const isTls = this.configService.get<boolean>('redis.tls', false);
 
-      const connection = {
+      const connection: any = {
         host,
         port,
         password: password || undefined,
+        tls: isTls ? {} : undefined,
         maxRetriesPerRequest: null,
       };
 

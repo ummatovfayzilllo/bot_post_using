@@ -1375,13 +1375,15 @@ export class AdminUpdate {
       const userId = BigInt(ctx.from.id);
       const postId = (ctx as any).match[1];
 
+      // 1. Telegram tugmasi qotib qolmasligi uchun darhol javob qaytaramiz
+      await ctx.answerCbQuery('🗑 Post o\'chirilmoqda...', { show_alert: false });
+
       // Post tafsilotlarini o'chirishdan oldin toifani aniqlaymiz
       const post = await this.postsService.getPostDetail(postId);
       const category: 'SCHEDULED' | 'SENT' = post?.status === 'SENT' ? 'SENT' : 'SCHEDULED';
 
       await this.postsService.deletePost(postId);
       await this.stateService.clearState(userId);
-      await ctx.answerCbQuery('🗑 Post o\'chirildi va chat tozalandi.', { show_alert: true });
 
       // Chatdagi post xabarini tozalaymiz / o'chiramiz
       try {
